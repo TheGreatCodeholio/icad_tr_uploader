@@ -1,0 +1,8 @@
+requests~=2.31.0
+colorama~=0.4.4
+DateTime~=5.1
+redis~=4.5.5
+urllib3~=1.26.16
+pydub~=0.25.1
+argparse~=1.4.0
+boto3~=1.26.151
