@@ -78,7 +78,7 @@ if system_config["compress_mp3"] == 1 and not mp3_exists:
     mp3_exists = True
 
 m4a_exists = os.path.isfile(m4a_file)
-if system_config["convert_to_m4a"] == 1 and not m4a_exists:
+if system_config["compress_m4a"] == 1 and not m4a_exists:
     error_message = convert_wav_m4a(system_config, wav_file)
     if error_message:
         logger.error(f"Exiting due to error: {error_message}")
@@ -87,23 +87,19 @@ if system_config["convert_to_m4a"] == 1 and not m4a_exists:
 
 # Upload to RDIO
 for rdio in system_config["rdio_systems"]:
-    if system_config["compress_mp3"] != 1 or not mp3_exists:
-        if system_config["compress_mp3"] != 1:
-            logger.error("Can not send to RDIO Server. MP3 Compression not enabled.")
+    if system_config["compress_mp3"] == 1 or mp3_exists:
+        if rdio["system_enabled"] == 1:
+            try:
+                upload_to_rdio(rdio, mp3_file, json_file)
+                logger.info(f"Successfully uploaded to RDIO server: {rdio['rdio_url']}")
+            except Exception as e:
+                logger.error(f"Failed to upload to RDIO server: {rdio['rdio_url']}. Error: {str(e)}", exc_info=True)
+                continue
         else:
-            logger.error(f"MP3 file does not exist: {mp3_file}")
-        break
-    elif rdio["system_enabled"]:
-        try:
-            upload_to_rdio(rdio, mp3_file, json_file)
-            logger.info(f"Successfully uploaded to RDIO server: {rdio['rdio_url']}")
-        except Exception as e:
-            logger.error(f"Failed to upload to RDIO server: {rdio['rdio_url']}. Error: {str(e)}", exc_info=True)
-            # decide what to do here: break or continue?
+            logger.info(f"RDIO system is disabled: {rdio['rdio_url']}")
             continue
     else:
-        logger.info(f"RDIO system is disabled: {rdio['rdio_url']}")
-        # decide what to do here: break or continue?
+        logger.error("Can not send to RDIO Server. MP3 Compression not enabled.")
         continue
 
 # Upload to iCAD API
@@ -112,6 +108,8 @@ if system_config["icad_api"]["enabled"] == 1:
         upload_success = upload_to_icad(system_config["icad_api"], mp3_file, json_file)
         if not upload_success:
             logger.error("Failed to upload to iCAD API Server.")
+        else:
+            logger.info(f"Successfully uploaded to iCAD API server: {system_config['icad_api']['icad_url']}")
     else:
         logger.error("Can not send to iCAD API Server. MP3 Compression not enabled.")
 
@@ -121,6 +119,8 @@ if system_config["ap_api"]["enabled"] == 1:
         upload_success = upload_to_alertpage(file_storage_config, system_config["ap_api"], mp3_file, json_file)
         if not upload_success:
             logger.error("Failed to upload to AlertPage API Server.")
+        else:
+            logger.info(f"Successfully uploaded to AlertPage API server")
     else:
         logger.error("Can not send to AlertPage API Server. MP3 Compression not enabled.")
 
