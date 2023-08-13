@@ -1,15 +1,18 @@
 import json
-import traceback
+import os
 
 import requests
 import logging
 
-from lib.file_save_handler import get_storage
-
 module_logger = logging.getLogger('tr_uploader.alertpage_uploader')
 
 
-def upload_to_alertpage(file_storage_config, ap_data, mp3_path, json_path):
+def upload_to_alertpage(ap_data, mp3_path, json_path, mp3_url):
+
+    if mp3_url == "":
+        module_logger.error(f"MP3 Wasn't uploaded to remote storage: {mp3_path}")
+        return False
+
     if not os.path.isfile(mp3_path):
         module_logger.error(f"MP3 file does not exist: {mp3_path}")
         return False
@@ -30,19 +33,7 @@ def upload_to_alertpage(file_storage_config, ap_data, mp3_path, json_path):
         module_logger.critical(f'Failed reading JSON file: {str(e)}')
         return False
 
-    try:
-        with open(mp3_path, 'rb') as af:
-            audio_data = af.read()
-
-        storage_type = file_storage_config["storage_type"]
-        storage = get_storage(storage_type, file_storage_config)
-        remote_path = f'{ap_data["system"]}/{json_data["talkgroup"]}/{mp3_path.split("/")[-1]}'
-        response = storage.upload_file(audio_data, remote_path)
-        json_data["filename"] = response["file_path"]
-    except Exception as e:
-        module_logger.error(f'File Upload Failed: {str(e)}')
-        return False
-
+    json_data["filename"] = mp3_url
     json_data["auth_key"] = ap_data['auth_key']
     json_data["system"] = ap_data['system']
     json_data["source"] = ap_data['source']

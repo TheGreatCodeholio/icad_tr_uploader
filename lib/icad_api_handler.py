@@ -1,10 +1,8 @@
 import json
 import os
-
 import requests
 import logging
 
-from colorama import Fore, Style
 
 module_logger = logging.getLogger('tr_uploader.icad_uploader')
 
@@ -31,7 +29,7 @@ def upload_to_icad(icad_data, mp3_path, json_path):
         module_logger.critical(f'Failed Uploading To iCAD API: Empty JSON')
         return False
 
-    json_data["key"] = icad_data['icad_url']
+    json_data["api_key"] = icad_data['icad_url']
     json_data["system_id"] = icad_data['system_id']
 
     try:
@@ -42,8 +40,15 @@ def upload_to_icad(icad_data, mp3_path, json_path):
             r.raise_for_status()
 
             module_logger.info(f'Successfully uploaded to iCAD API: {r.status_code}, {r.text}')
+
+            # # Save the response JSON
+            # json_path = mp3_path.replace(".mp3", "_tones.json")
+            # with open(json_path, 'w') as json_file:
+            #     json_file.write(r.text)
+            # json_file.close()
+
     except (FileNotFoundError, requests.exceptions.RequestException, IOError) as e:
-        module_logger.critical(f'Failed Uploading To iCAD API: {str(e)}')
+        module_logger.critical(f'Failed Uploading To iCAD API: {str(e)} {r.status_code} {r.text}')
         return False
 
     return True
