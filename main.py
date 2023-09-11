@@ -1,112 +1,100 @@
 import json
 import argparse
 import os
+from pathlib import Path
 
-from lib.audio_file_handler import convert_wav_mp3, archive_files, clean_files
-from lib.file_save_handler import get_storage
+from lib.audio_file_handler import archive_files, clean_files
 from lib.icad_api_handler import upload_to_icad
 from lib.logging_handler import CustomLogger
+from lib.openmhz_handler import upload_to_openmhz
 from lib.rdio_handler import upload_to_rdio
-from lib.alertpage_handler import upload_to_alertpage
 
-log_level = 1
 
-app_name = "tr_uploader"
-
-parser = argparse.ArgumentParser(description='Process Arguments.')
-parser.add_argument("sys_name", help="System Name.")
-parser.add_argument("audio_wav", help="Path to WAV.")
-
-try:
+def parse_arguments():
+    parser = argparse.ArgumentParser(description='Process Arguments.')
+    parser.add_argument("sys_name", help="System Name.")
+    parser.add_argument("audio_wav", help="Path to WAV.")
     args = parser.parse_args()
-except argparse.ArgumentError as e:
-    # handle argument errors
-    print(f'{e}')
-    parser.print_usage()
-    exit(1)
-except Exception as e:
-    # handle other exceptions
-    print(f'{e}')
-    exit(1)
 
-root_path = os.getcwd()
-config_file = 'etc/config.json'
-config_path = os.path.abspath(os.path.join(root_path, config_file))
-log_path = args.audio_wav.replace(".wav", ".log")
+    return args
 
-logger = CustomLogger(log_level, f'{app_name}', log_path).logger
 
-try:
-    with open(config_path, 'r') as f:
-        config_data = json.load(f)
-    f.close()
+def get_paths(args):
+    root_path = os.getcwd()
+    config_file = 'config.json'
+    config_path = os.path.join(f'{root_path}/etc', config_file)
+    wav_path = args.audio_wav
+    mp3_path = wav_path.replace(".wav", ".mp3")
+    m4a_path = wav_path.replace(".wav", ".m4a")
+    log_path = wav_path.replace(".wav", ".log")
+    json_path = wav_path.replace(".wav", ".json")
     system_name = args.sys_name
-    system_config = config_data["systems"][system_name]
-    file_storage_config = config_data["file_storage"]
-
-    json_file = args.audio_wav.replace(".wav", ".json")
-    mp3_file = args.audio_wav.replace(".wav", ".mp3")
-    m4a_file = args.audio_wav.replace(".wav", ".m4a")
-    wav_file = args.audio_wav
-    file_name = wav_file.split('/')[-1]
-    file_path = wav_file.replace("/" + file_name, "")
-
-except FileNotFoundError:
-    logger.error(f'Configuration file {config_file} not found.')
-    exit(1)
-except json.JSONDecodeError:
-    logger.error(f'Configuration file {config_file} is not in valid JSON format.')
-    exit(1)
-else:
-    logger.info(f'Successfully loaded configuration from {config_file}')
-
-# compress to mp3 if enabled
-mp3_exists = os.path.isfile(mp3_file)
-if system_config["compress_mp3"] == 1 and not mp3_exists:
-    error_message = convert_wav_mp3(system_config, wav_file)
-    if error_message:
-        logger.error(f"Exiting due to error: {error_message}")
-        exit(1)
-    mp3_exists = True
+    return config_path, wav_path, mp3_path, m4a_path, log_path, json_path, system_name
 
 
-def save_to_remote(mp3_file):
+def load_config(config_path, app_name, system_name, log_path):
     try:
-        with open(mp3_file, 'rb') as af:
-            audio_data = af.read()
-        af.close()
+        with open(config_path, 'r') as f:
+            config_data = json.load(f)
+        logger = CustomLogger(config_data["log_level"], app_name, log_path).logger
+        system_config = config_data["systems"][system_name]
+        logger.info(f'Successfully loaded configuration.')
+        return config_data, logger, system_config
+    except FileNotFoundError:
+        print(f'Configuration file {config_path} not found.')
+        exit(0)
+    except json.JSONDecodeError:
+        print(f'Configuration file {config_path} is not in valid JSON format.')
+        exit(0)
 
-        storage_type = file_storage_config["storage_type"]
-        storage = get_storage(storage_type, file_storage_config)
 
-        remote_path = os.path.join(file_storage_config[file_storage_config["storage_type"]]["remote_path"],
-                                   file_name.replace(".wav", ".mp3"))
+def load_call_data(json_path):
+    try:
+        with open(json_path, 'r') as fj:
+            call_data = json.load(fj)
+        logger.info(f'Successfully loaded call json.')
+        return call_data
+    except FileNotFoundError:
+        print(f'JSON Call Data file {json_path} not found.')
+        return False
+    except json.JSONDecodeError:
+        print(f'JSON Call Data file {json_path} is not in valid JSON format.')
+        return False
 
-        response = storage.upload_file(audio_data, remote_path)
-        if not response:
-            mp3_file_url = ""
-        else:
-            mp3_file_url = response["file_path"]
 
+def main():
+    app_name = "icad_tr_uploader"
+    args = parse_arguments()
+    config_path, wav_path, mp3_path, m4a_path, log_path, json_path, system_name = get_paths(args)
+    config_data, logger, system_config = load_config(config_path, app_name, system_name, log_path)
+
+    # check if mp3 exists
+    mp3_exists = os.path.isfile(mp3_path)
+    if not mp3_exists:
+        logger.error("No MP3 File Exiting")
+        exit(1)
+
+    m4a_exists = os.path.isfile(m4a_path)
+
+    try:
+        call_data = load_call_data(json_path)
+        if not call_data:
+            logger.error("Could Not Load Call Data JSON")
+            exit(1)
     except Exception as e:
-        return ""
+        logger.error(e, exc_info=True)
+        logger.error("Could Not Load Call Data JSON")
+        exit(1)
 
-    return mp3_file_url
+    logger.debug(call_data)
 
+    # TODO Some Sort of Check For Duplicate Transmissions based on timestamp and length
 
-if not os.path.isfile(json_file):
-    logger.error("No JSON File Created Exiting")
-    exit(1)
-
-with open(json_file, "r") as c_data:
-    call_data = json.load(c_data)
-
-# Upload to RDIO
-for rdio in system_config["rdio_systems"]:
-    if system_config["compress_mp3"] == 1 or mp3_exists:
-        if rdio["system_enabled"] == 1:
+    # Upload to RDIO
+    for rdio in system_config["rdio_systems"]:
+        if rdio["enabled"] == 1:
             try:
-                upload_to_rdio(rdio, mp3_file, json_file)
+                upload_to_rdio(rdio, mp3_path, json_path)
                 logger.info(f"Successfully uploaded to RDIO server: {rdio['rdio_url']}")
             except Exception as e:
                 logger.error(f"Failed to upload to RDIO server: {rdio['rdio_url']}. Error: {str(e)}", exc_info=True)
@@ -114,47 +102,45 @@ for rdio in system_config["rdio_systems"]:
         else:
             logger.info(f"RDIO system is disabled: {rdio['rdio_url']}")
             continue
-    else:
-        logger.error("Can not send to RDIO Server. MP3 Compression not enabled.")
-        continue
 
-# Upload to iCAD API
-if system_config["icad_api"]["enabled"] == 1:
-
-    if call_data.get("talkgroup", 0) not in system_config["icad_api"]["talkgroups"]:
-        logger.info(f"Not Sending to Tone Detect API not in talkgroups.")
-    else:
-        if system_config["compress_mp3"] == 1 or mp3_exists:
-            upload_success = upload_to_icad(system_config["icad_api"], mp3_file, json_file)
+    # Post to iCAD Tone Detect API
+    if system_config["icad_detect_api"]["enabled"] == 1:
+        if call_data.get("talkgroup", 0) not in system_config["icad_detect_api"]["talkgroups"]:
+            logger.info(f"Not Sending to Tone Detect API not in talkgroups.")
+        else:
+            upload_success = upload_to_icad(system_config["icad_detect_api"], mp3_path, call_data)
             if not upload_success:
-                logger.error("Failed to upload to iCAD API Server.")
+                logger.error("Failed to upload to iCAD Detect API Server.")
             else:
-                logger.info(f"Successfully uploaded to iCAD API server: {system_config['icad_api']['icad_url']}")
-        else:
-            logger.error("Can not send to iCAD API Server. MP3 Compression not enabled.")
+                logger.info(f"Successfully uploaded to iCAD Detect API server: {system_config['icad_detect_api']['icad_url']}")
 
-# Upload to AlertPage
-if system_config["ap_api"]["enabled"] == 1:
-    if system_config["compress_mp3"] == 1 or mp3_exists:
-        mp3_file_url = save_to_remote(mp3_file)
-        upload_success = upload_to_alertpage(system_config["ap_api"], mp3_file, json_file,
-                                             mp3_file_url)
-        if not upload_success:
-            logger.error("Failed to upload to AlertPage API Server.")
+    # Upload to OpenMHZ
+    if system_config["openmhz"]["enabled"] == 1:
+        if m4a_exists:
+            openmhz_result = upload_to_openmhz(system_config["openmhz"], m4a_path, call_data)
+            logger.debug(openmhz_result)
         else:
-            logger.info(f"Successfully uploaded to AlertPage API server")
-    else:
-        logger.error("Can not send to AlertPage API Server. MP3 Compression not enabled.")
+            logger.info(f"No M4A file can't send to OpenMHZ")
 
-if system_config["archive_files"]:
-    files = [log_path, json_file, mp3_file, m4a_file, wav_file]
-    archive_files(files, system_config["archive_path"])
-    clean_files(system_config["archive_path"], system_config["archive_days"])
-else:
-    for file in [log_path, json_file, mp3_file, m4a_file, wav_file]:
-        if file.exists():
-            try:
-                file.unlink()
-                print(f"{file} removed successfully.")
-            except Exception as e:
-                print(f"Failed to remove {file}. Reason: {str(e)}")
+    if system_config["archive_days"] > 0:
+        files = [log_path, json_path, mp3_path, m4a_path, wav_path]
+        archive_files(files, system_config["archive_path"])
+        clean_files(system_config["archive_path"], system_config["archive_days"])
+    elif system_config["archive_days"] == 0:
+        pass
+    elif system_config["archive_days"] == -1:
+        files = [log_path, json_path, mp3_path, m4a_path, wav_path]
+        for file in files:
+            file_path = Path(file)
+            if file_path.is_file():
+                try:
+                    os.remove(file_path)
+                    logger.debug(f"File {file} removed successfully.")
+                except Exception as e:
+                    logger.error(f"Unable to remove file {file}. Error: {str(e)}")
+            else:
+                logger.error(f"File {file} does not exist.")
+
+
+if __name__ == "__main__":
+    main()

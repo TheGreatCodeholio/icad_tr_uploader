@@ -1,46 +1,28 @@
 {
-    "file_storage": {
-        "storage_type": "aws_s3",
-        "google_cloud": {
-            "project_id": "application-id",
-            "bucket_name": "trunk_recorder",
-            "credentials_path": "etc/google_cloud.json"
-        },
-        "aws_s3": {
-            "access_key_id": "AKESECRETKEY",
-            "secret_access_key": "accesskey345+=",
-            "bucket_name": "trunk_recorder",
-            "region": "us-east-1"
+  "log_level": 1,
+  "systems": {
+    "example-system": {
+      "archive_days": 0,
+      "archive_path": "/home/example/rtl_archive",
+      "rdio_systems": [
+        {
+          "enabled": 0,
+          "system_id": 1111,
+          "rdio_url": "http://example.com:3000/api/trunk-recorder-call-upload",
+          "rdio_api_key": "example-api-key"
         }
-    },
-    "systems": {
-        "bradford-pa": {
-            "keep_audio_days": 7,
-            "compress_mp3": 1,
-            "mp3_bitrate": 32,
-            "compress_m4a": 0,
-            "m4a_bitrate": 32,
-            "rdio_systems": [
-                {
-                    "system_enabled": 1,
-                    "system_id": 2248,
-                    "rdio_url": "http://rdioserver.local:3000/api/trunk-recorder-call-upload",
-                    "rdio_api_key": "api_key"
-                }
-            ],
-            "icad_api": {
-                "enabled": 1,
-                "system_id": 2248,
-                "icad_url": "http://icadtonedetect.local:8002/tone_detect"
-            },
-            "ap_api": {
-                "enabled": 1,
-                "source": 147064,
-                "system": 24981,
-                "auth_key": "88fb0f14-f0e5-11ed-8ec4-0286f002bf45",
-                "url": "https://api.alertpage.local/process"
-            }
-        }
-
+      ],
+      "openmhz": {
+        "enabled": 0,
+        "short_name": "example",
+        "api_key": "example-api-key"
+      },
+      "icad_detect_api": {
+        "enabled": 0,
+        "talkgroups": [1, 2, 4],
+        "icad_url": "https://detect.example.com/tone_detect",
+        "icad_api_key": ""
+      }
     }
+  }
 }

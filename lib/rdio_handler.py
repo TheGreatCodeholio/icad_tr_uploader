@@ -1,8 +1,6 @@
 import requests
 import logging
 
-from colorama import Fore, Style
-
 module_logger = logging.getLogger('ap_tr_uploader.rdio_uploader')
 
 
