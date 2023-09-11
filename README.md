@@ -21,9 +21,9 @@ In your Trunk-Recorder configuration under your system.
 "compressWav": true, # Converts to mp3 and m4a 
 ```
 
-**AudioArchive** required to make Trunk-Recorder save audio files.
-**uploadScript** Path to the icad_tr_uploader upload.sh including systems shortname as a parameter.
-**compressWav** Converts WAV to MP3 and M4A. The MP3 is required to upload to RDIO and iCAD Tone Detect and M4A is required for OpenMHZ
+- `AudioArchive` required to make Trunk-Recorder save audio files.
+- `uploadScript` Path to the icad_tr_uploader upload.sh including systems shortname as a parameter.
+- `compressWav` Converts WAV to MP3 and M4A. The MP3 is required to upload to RDIO and iCAD Tone Detect and M4A is required for OpenMHZ
 
 
 Copy upload_example.sh to upload.sh and modify for your environment
