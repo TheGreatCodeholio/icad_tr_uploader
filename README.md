@@ -57,7 +57,7 @@ Defaults are in bold
 
 ### Systems Sections
 Inside of the Systems Global Section you add a system by its shortname define in TR configuration. Inside of that JSON is where the system configuration goes.
-```
+```json
 "systems": {
     "system1_short_name":{
         "enabled": 1
@@ -129,4 +129,52 @@ Upload to iCAD Tone Detect Instance
 - `icad_url` (URL path to iCad Tone Detect API): string 
 - `icad_api_key` (API Key for iCAD): string - currently unused leave empty `""`
 
-Final Full Example in etc/config_example.json
+### Full Example of config.json
+```json
+{
+  "log_level": 1,
+  "systems": {
+    "chemung-ny": {
+      "archive_days": 14,
+      "archive_path": "/home/ccfirewire/chemung_archive",
+      "rdio_systems": [
+        {
+          "enabled": 1,
+          "system_id": 1111,
+          "rdio_url": "http://example.com:3000/api/trunk-recorder-call-upload",
+          "rdio_api_key": "eu2i3-pmwek-rkd3-s4b-d33ff"
+        }
+      ],
+      "openmhz": {
+        "enabled": 1,
+        "short_name": "chemung-ny",
+        "api_key": "eu2i3-kyubp-rkd3-s4b-d33ff"
+      },
+      "icad_detect_api": {
+        "enabled": 1,
+        "talkgroups": [1],
+        "icad_url": "https://detect.example.com/tone_detect",
+        "icad_api_key": ""
+      }
+    }
+  }
+}
+```
+
+### Full Example of System in Trunk Recorder
+```json
+
+{
+  "type": "conventionalP25",
+  "squelch": -32,
+  "channelFile": "/home/ccfirewire/tr_config/chemung_county_p25_channels.csv",
+  "shortName": "chemung-ny",
+  "callLog": true,
+  "audioArchive": true,
+  "uploadScript": "/home/ccfirewire/icad_tr_uploader/upload.sh chemung-ny",
+  "compressWav": true,
+  "digitalLevels": 2,
+  "decodeMDC": true,
+  "minDuration": 1.0
+}
+```
