@@ -19,7 +19,7 @@ def parse_arguments():
     return args
 
 
-def convert_audio(system_config, wav_file_path):
+def convert_audio(logger, system_config, wav_file_path):
     m4a_res = convert_wav_m4a(system_config, wav_file_path)
     mp3_res = convert_wav_mp3(system_config, wav_file_path)
     if not m4a_res or not mp3_res:
@@ -57,7 +57,7 @@ def load_config(config_path, app_name, system_name, log_path):
         exit(0)
 
 
-def load_call_data(json_path):
+def load_call_data(logger, json_path):
     try:
         with open(json_path, 'r') as fj:
             call_data = json.load(fj)
@@ -77,7 +77,7 @@ def main():
     config_path, wav_path, mp3_path, m4a_path, log_path, json_path, system_name = get_paths(args)
     config_data, logger, system_config = load_config(config_path, app_name, system_name, log_path)
 
-    convert_result = convert_audio(system_config, wav_path)
+    convert_result = convert_audio(logger, system_config, wav_path)
 
     # check if mp3 exists
     if not convert_result:
@@ -87,7 +87,7 @@ def main():
     m4a_exists = os.path.isfile(m4a_path)
 
     try:
-        call_data = load_call_data(json_path)
+        call_data = load_call_data(logger, json_path)
         if not call_data:
             logger.error("Could Not Load Call Data JSON")
             exit(1)
