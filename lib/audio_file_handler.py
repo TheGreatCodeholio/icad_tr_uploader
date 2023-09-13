@@ -10,18 +10,19 @@ module_logger = logging.getLogger('icad_tr_uploader.audio_file')
 
 
 def convert_wav_m4a(system_config, wav_file_path):
+    bitrate = system_config.get("m4a_bitrate", 32)
     if not os.path.isfile(wav_file_path):
         module_logger.error(f"WAV file does not exist: {wav_file_path}")
         return f"MP3 file does not exist: {wav_file_path}"
 
-    module_logger.info(f'Converting WAV to Mono M4A at {system_config["m4a_bitrate"]}k')
+    module_logger.info(f'Converting WAV to Mono M4A at {bitrate}k')
 
-    command = f'ffmpeg -y -i {wav_file_path} -af aresample=resampler=soxr -ar 22050 -c:a aac -ac 1 -b:a {system_config["m4a_bitrate"]}k {wav_file_path.replace(".wav", ".m4a")}'
+    command = f'ffmpeg -y -i {wav_file_path} -af aresample=resampler=soxr -ar 22050 -c:a aac -ac 1 -b:a {bitrate}k {wav_file_path.replace(".wav", ".m4a")}'
 
     try:
         output = subprocess.check_output(command, shell=True, text=True, stderr=subprocess.STDOUT)
         module_logger.debug(output)
-        module_logger.info(f"Successfully converted WAV to M4A for file: {wav_file_path}")
+        module_logger.info(f"Successfully converted WAV to M4A from file: {wav_file_path}")
     except subprocess.CalledProcessError as e:
         error_message = f"Failed to convert WAV to M4A: {e.output}"
         module_logger.error(error_message)
@@ -35,18 +36,19 @@ def convert_wav_m4a(system_config, wav_file_path):
 
 
 def convert_wav_mp3(system_config, wav_file_path):
+    bitrate = system_config.get("mp3_bitrate", 32)
     if not os.path.isfile(wav_file_path):
         module_logger.error(f"WAV file does not exist: {wav_file_path}")
         return f"MP3 file does not exist: {wav_file_path}"
 
-    module_logger.info(f'Converting WAV to Mono MP3 at {str(system_config["mp3_bitrate"])}k')
+    module_logger.info(f'Converting WAV to Mono MP3 at {bitrate}k')
 
-    command = f"ffmpeg -y -i {wav_file_path} -vn -ar 22050 -ac 1 -b:a {system_config['mp3_bitrate']}k {wav_file_path.replace('.wav', '.mp3')}"
+    command = f"ffmpeg -y -i {wav_file_path} -vn -ar 22050 -ac 1 -b:a {bitrate}k {wav_file_path.replace('.wav', '.mp3')}"
 
     try:
         output = subprocess.check_output(command, shell=True, text=True, stderr=subprocess.STDOUT)
         module_logger.debug(output)
-        module_logger.info(f"Successfully converted WAV to MP3 for file: {wav_file_path}")
+        module_logger.info(f"Successfully converted WAV to MP3 from file: {wav_file_path}")
     except subprocess.CalledProcessError as e:
         error_message = f"Failed to convert WAV to MP3: {e.output}"
         module_logger.error(error_message)
