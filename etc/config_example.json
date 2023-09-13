@@ -4,6 +4,8 @@
     "example-system": {
       "archive_days": 0,
       "archive_path": "/home/example/rtl_archive",
+      "mp3_bitrate": "32",
+      "m4a_bitrate": "32",
       "rdio_systems": [
         {
           "enabled": 0,

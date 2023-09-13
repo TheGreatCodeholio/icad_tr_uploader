@@ -18,12 +18,10 @@ In your Trunk-Recorder configuration under your system.
 ```
 "audioArchive": true, # saves audio files
 "uploadScript": "/home/ccfirewire/icad_tr_uploader/upload.sh chemung-ny",
-"compressWav": true, # Converts to mp3 and m4a 
 ```
 
-- `AudioArchive` required to make Trunk-Recorder save audio files.
+- `audioArchive` required to make Trunk-Recorder save audio files.
 - `uploadScript` Path to the icad_tr_uploader upload.sh including systems shortname as a parameter.
-- `compressWav` Converts WAV to MP3 and M4A. The MP3 is required to upload to RDIO and iCAD Tone Detect and M4A is required for OpenMHZ
 
 
 Copy upload_example.sh to upload.sh and modify for your environment
@@ -31,7 +29,7 @@ Copy upload_example.sh to upload.sh and modify for your environment
 #! /bin/bash
 
 cd /home/ccfirewire/icad_rtl_uploader
-python3 main.py ${1} ${2}
+python3 tr_uploader.py ${1} ${2}
 status=$?
 
 if [ $status -ne 0 ]; then
@@ -67,7 +65,8 @@ Inside of the Systems Global Section you add a system by its shortname define in
      }
 }
 ```
-
+- `mp3_bitrate` (bitrate for mp3): integer - sets the bitrate for converted mp3 files
+- `m4a_bitrate` (bitrate for m4a): integer - sets the bitrate for converted m4a files
 - `archive_days` (days to archive files): `-1` - Removes all files after script runs **`0`** - Do nothing, `1` or more - remove files after `1` or more days 
 - `archive_path` (path to archive files to): string `"/home/ccfirewire/chemung_archive"`
 - `rdio_systems` (holds configuration for RDIO systems): list of JSON
@@ -172,7 +171,7 @@ Upload to iCAD Tone Detect Instance
   "callLog": true,
   "audioArchive": true,
   "uploadScript": "/home/ccfirewire/icad_tr_uploader/upload.sh chemung-ny",
-  "compressWav": true,
+  "compressWav": false,
   "digitalLevels": 2,
   "decodeMDC": true,
   "minDuration": 1.0
