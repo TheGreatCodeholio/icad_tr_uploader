@@ -10,6 +10,31 @@ import traceback
 module_logger = logging.getLogger('icad_tr_uploader.audio_file')
 
 
+def convert_wav_mp3(wav_file_path):
+    if not os.path.isfile(wav_file_path):
+        module_logger.error(f"WAV file does not exist: {wav_file_path}")
+        return f"MP3 file does not exist: {wav_file_path}"
+
+    module_logger.info(f'Converting WAV to Mono MP3 at 32k')
+
+    command = f"ffmpeg -y -i {wav_file_path} -vn -ar 22050 -ac 1 -b:a 32k {wav_file_path.replace('.wav', '.mp3')}"
+
+    try:
+        output = subprocess.check_output(command, shell=True, text=True, stderr=subprocess.STDOUT)
+        module_logger.debug(output)
+        module_logger.info(f"Successfully converted WAV to MP3 from file: {wav_file_path}")
+    except subprocess.CalledProcessError as e:
+        error_message = f"Failed to convert WAV to MP3: {e.output}"
+        module_logger.error(error_message)
+        return False
+    except Exception as e:
+        error_message = f"An unexpected error occurred during conversion: {str(e)}"
+        module_logger.error(error_message, exc_info=True)
+        return False
+
+    return True
+
+
 def archive_files(files, archive_path):
     # Get the current date
     current_date = datetime.now()

@@ -3,7 +3,7 @@ import argparse
 import os
 from pathlib import Path
 
-from lib.audio_file_handler import archive_files, clean_files
+from lib.audio_file_handler import archive_files, clean_files, convert_wav_mp3
 from lib.icad_tone_detect_handler import upload_to_icad
 from lib.logging_handler import CustomLogger
 from lib.openmhz_handler import upload_to_openmhz
@@ -18,6 +18,14 @@ def parse_arguments():
 
     return args
 
+
+def convert_audio(logger, wav_file_path):
+    mp3_res = convert_wav_mp3(wav_file_path)
+    if not mp3_res:
+        logger.error("Failed to Convert Audio to Mp3")
+        return False
+    else:
+        return True
 
 def get_paths(args):
     root_path = os.getcwd()
@@ -67,6 +75,12 @@ def main():
     args = parse_arguments()
     config_path, wav_path, mp3_path, m4a_path, log_path, json_path, system_name = get_paths(args)
     config_data, logger, system_config = load_config(config_path, app_name, system_name, log_path)
+
+    convert_result = convert_audio(logger, wav_path)
+
+    # check if mp3 exists
+    if not convert_result:
+        exit(1)
 
     mp3_exists = os.path.isfile(mp3_path)
     m4a_exists = os.path.isfile(m4a_path)
