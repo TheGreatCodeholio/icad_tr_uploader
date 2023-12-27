@@ -4,14 +4,14 @@ import logging
 module_logger = logging.getLogger('ap_tr_uploader.rdio_uploader')
 
 
-def upload_to_rdio(rdio_data, mp3_path, json_path):
+def upload_to_rdio(rdio_data, m4a_path, json_path):
     module_logger.info(f'Uploading To RDIO: {str(rdio_data["rdio_url"])}')
     try:
-        with open(mp3_path, 'rb') as audio_file, open(json_path, 'rb') as json_file:
+        with open(m4a_path, 'rb') as audio_file, open(json_path, 'rb') as json_file:
             data = {
                 'key': rdio_data['rdio_api_key'],
                 'system': rdio_data['system_id'],
-                'audio': (mp3_path.split('/')[-1], audio_file, 'audio/mpeg'),
+                'audio': (m4a_path.split('/')[-1], audio_file, 'audio/mpeg'),
                 'meta': (json_path.split('/')[-1], json_file, 'application/json')
             }
             r = requests.post(rdio_data['rdio_url'], files=data)

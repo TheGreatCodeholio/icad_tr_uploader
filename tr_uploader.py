@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 from lib.audio_file_handler import archive_files, clean_files, convert_wav_m4a, convert_wav_mp3
-from lib.icad_api_handler import upload_to_icad
+from lib.icad_tone_detect_handler import upload_to_icad
 from lib.logging_handler import CustomLogger
 from lib.openmhz_handler import upload_to_openmhz
 from lib.rdio_handler import upload_to_rdio
@@ -18,15 +18,6 @@ def parse_arguments():
 
     return args
 
-
-def convert_audio(logger, system_config, wav_file_path):
-    m4a_res = convert_wav_m4a(system_config, wav_file_path)
-    mp3_res = convert_wav_mp3(system_config, wav_file_path)
-    if not m4a_res or not mp3_res:
-        logger.error("Failed to Convert Audio to Mp3 and M4A")
-        return False
-    else:
-        return True
 
 def get_paths(args):
     root_path = os.getcwd()
@@ -77,12 +68,6 @@ def main():
     config_path, wav_path, mp3_path, m4a_path, log_path, json_path, system_name = get_paths(args)
     config_data, logger, system_config = load_config(config_path, app_name, system_name, log_path)
 
-    convert_result = convert_audio(logger, system_config, wav_path)
-
-    # check if mp3 exists
-    if not convert_result:
-        exit(1)
-
     mp3_exists = os.path.isfile(mp3_path)
     m4a_exists = os.path.isfile(m4a_path)
 
@@ -100,14 +85,29 @@ def main():
 
     # TODO Some Sort of Check For Duplicate Transmissions based on timestamp and length
 
+    # Upload to iCAD Tone Detect
+    if system_config["icad_tone_detect"]["enabled"] == 1:
+        if mp3_exists:
+            if call_data.get("talkgroup", 0) not in system_config["icad_tone_detect"]["talkgroups"]:
+                logger.info(f"Not Sending to Tone Detect API not in talkgroups.")
+            else:
+                upload_success = upload_to_icad(system_config["icad_tone_detect"], mp3_path, call_data)
+                if not upload_success:
+                    logger.error("Failed to upload to iCAD Tone Detect API.")
+                else:
+                    logger.info(
+                        f"Successfully uploaded to iCAD Tone Detect API: {system_config['icad_tone_detect']['icad_url']}")
+        else:
+            logger.warning(f"No MP3 file can't send to iCAD Tone Detect API")
+
     # Upload to RDIO
     for rdio in system_config["rdio_systems"]:
         if rdio["enabled"] == 1:
-            if not mp3_exists:
-                logger.warning(f"No MP3 file can't send to RDIO")
+            if not m4a_exists:
+                logger.warning(f"No M4A file can't send to RDIO")
                 continue
             try:
-                upload_to_rdio(rdio, mp3_path, json_path)
+                upload_to_rdio(rdio, m4a_path, json_path)
                 logger.info(f"Successfully uploaded to RDIO server: {rdio['rdio_url']}")
             except Exception as e:
                 logger.error(f"Failed to upload to RDIO server: {rdio['rdio_url']}. Error: {str(e)}", exc_info=True)
@@ -115,21 +115,6 @@ def main():
         else:
             logger.info(f"RDIO system is disabled: {rdio['rdio_url']}")
             continue
-
-    # Post to iCAD Tone Detect API
-    if system_config["icad_detect_api"]["enabled"] == 1:
-        if mp3_exists:
-            if call_data.get("talkgroup", 0) not in system_config["icad_detect_api"]["talkgroups"]:
-                logger.info(f"Not Sending to Tone Detect API not in talkgroups.")
-            else:
-                upload_success = upload_to_icad(system_config["icad_detect_api"], mp3_path, call_data)
-                if not upload_success:
-                    logger.error("Failed to upload to iCAD Detect API Server.")
-                else:
-                    logger.info(
-                        f"Successfully uploaded to iCAD Detect API server: {system_config['icad_detect_api']['icad_url']}")
-        else:
-            logger.warning(f"No MP3 file can't send to iCAD Detect API")
 
     # Upload to OpenMHZ
     if system_config["openmhz"]["enabled"] == 1:
