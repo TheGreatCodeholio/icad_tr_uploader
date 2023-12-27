@@ -3,7 +3,7 @@ import argparse
 import os
 from pathlib import Path
 
-from lib.audio_file_handler import archive_files, clean_files, convert_wav_m4a, convert_wav_mp3
+from lib.audio_file_handler import archive_files, clean_files
 from lib.icad_tone_detect_handler import upload_to_icad
 from lib.logging_handler import CustomLogger
 from lib.openmhz_handler import upload_to_openmhz
