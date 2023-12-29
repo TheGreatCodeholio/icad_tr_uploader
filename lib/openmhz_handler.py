@@ -10,6 +10,7 @@ module_logger = logging.getLogger('icad_tr_uploader.openmhz_uploader')
 
 
 def upload_to_openmhz(openmhz, m4a_path, call_data):
+    module_logger.info("Sending to OpenMHZ")
     api_key = openmhz.get('api_key', None)
     short_name = openmhz.get('short_name', None)
 
@@ -49,7 +50,7 @@ def upload_to_openmhz(openmhz, m4a_path, call_data):
     )
 
     if response.status_code == 200:
-        module_logger.info('Upload successful.')
+        module_logger.info('Upload to OpenMHZ successful.')
     else:
-        module_logger.error('Upload failed.')
+        module_logger.error('Upload to OpenMHZ failed.')
     return response

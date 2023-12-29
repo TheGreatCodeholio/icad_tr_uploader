@@ -134,7 +134,6 @@ def main():
     if system_config["openmhz"]["enabled"] == 1:
         if m4a_exists:
             openmhz_result = upload_to_openmhz(system_config["openmhz"], m4a_path, call_data)
-            logger.debug(openmhz_result)
         else:
             logger.info(f"No M4A file can't send to OpenMHZ")
 
