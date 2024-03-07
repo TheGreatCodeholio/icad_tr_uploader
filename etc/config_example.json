@@ -19,6 +19,12 @@
         "short_name": "example",
         "api_key": "example-api-key"
       },
+      "broadcastify_calls": {
+        "enabled": 0,
+        "calls_slot": -1,
+        "system_id": 0,
+        "api_key": ""
+      },
       "icad_detect_api": {
         "enabled": 0,
         "talkgroups": [1, 2, 4],

@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 from lib.audio_file_handler import archive_files, clean_files, convert_wav_mp3
+from lib.broadcastify_calls_handler import upload_to_broadcastify_calls
 from lib.icad_tone_detect_handler import upload_to_icad
 from lib.logging_handler import CustomLogger
 from lib.openmhz_handler import upload_to_openmhz
@@ -127,7 +128,7 @@ def main():
                 logger.error(f"Failed to upload to RDIO server: {rdio['rdio_url']}. Error: {str(e)}", exc_info=True)
                 continue
         else:
-            logger.info(f"RDIO system is disabled: {rdio['rdio_url']}")
+            logger.warning(f"RDIO system is disabled: {rdio['rdio_url']}")
             continue
 
     # Upload to OpenMHZ
@@ -135,7 +136,13 @@ def main():
         if m4a_exists:
             openmhz_result = upload_to_openmhz(system_config["openmhz"], m4a_path, call_data)
         else:
-            logger.info(f"No M4A file can't send to OpenMHZ")
+            logger.warning(f"No M4A file can't send to OpenMHZ")
+
+    if system_config["broadcastify_calls"]["enabled"] == 1:
+        if m4a_exists:
+            bcfy_calls_result = upload_to_broadcastify_calls(system_config["broadcastify_calls"], m4a_path, call_data)
+        else:
+            logger.warning(f"No M4A file can't send to Broadcastify Calls")
 
     if system_config["archive_days"] > 0:
         files = [log_path, json_path, mp3_path, m4a_path, wav_path]

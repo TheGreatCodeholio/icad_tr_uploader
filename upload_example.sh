@@ -1,7 +1,7 @@
 #! /bin/bash
 
 cd /home/example/icad_tr_uploader
-python3 tr_uploader.py ${1} ${2}
+python3 tr_uploader.py "${1}" "${2}"
 status=$?
 
 # Exit with 0 status, even if there is an error.

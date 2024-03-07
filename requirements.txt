@@ -3,3 +3,4 @@ colorama~=0.4.6
 DateTime~=5.2
 argparse~=1.4.0
 requests-toolbelt~=1.0.0
+urllib3~=2.1.0
