@@ -144,14 +144,15 @@ def main():
         else:
             logger.warning(f"No M4A file can't send to Broadcastify Calls")
 
+    files = [log_path, json_path, mp3_path, m4a_path, wav_path]
+
     if system_config["archive_days"] > 0:
-        files = [log_path, json_path, mp3_path, m4a_path, wav_path]
-        archive_files(files, system_config["archive_path"])
+        filtered_files = [file for file in files if any(file.endswith(ext) for ext in system_config.get("archive_extensions", []))]
+        archive_files(filtered_files, system_config["archive_path"])
         clean_files(system_config["archive_path"], system_config["archive_days"])
     elif system_config["archive_days"] == 0:
         pass
     elif system_config["archive_days"] == -1:
-        files = [log_path, json_path, mp3_path, m4a_path, wav_path]
         for file in files:
             file_path = Path(file)
             if file_path.is_file():
@@ -162,7 +163,6 @@ def main():
                     logger.error(f"Unable to remove file {file}. Error: {str(e)}")
             else:
                 logger.error(f"File {file} does not exist.")
-
 
 if __name__ == "__main__":
     main()
