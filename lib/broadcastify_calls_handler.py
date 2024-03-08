@@ -1,9 +1,6 @@
 import logging
 import os
-from urllib.error import HTTPError
-
 import requests
-import urllib3
 
 module_logger = logging.getLogger('icad_tr_uploader.broadcastify_calls')
 
