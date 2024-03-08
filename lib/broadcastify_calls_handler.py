@@ -35,33 +35,29 @@ def upload_to_broadcastify_calls(broadcastify_config, m4a_file_path, call_data):
         'apiKey': (None, broadcastify_config["api_key"]),
     }
 
-    upload_request_response = requests.post(broadcastify_url, files=files)
-    if not upload_request_response:
-        return False
+    # Ensure files are closed properly using with statement
+    with requests.post(broadcastify_url, files=files) as upload_request_response:
+        if upload_request_response.status_code != 200:
+            module_logger.error("Unable to get Upload URL from Broadcastify Calls")
+            return False
 
-    module_logger.info("Uploading Call Audio")
-    response_data = upload_request_response
-    if response_data.status_code == 200:
-        upload_url = response_data.text.split(" ")[1]
-    else:
-        module_logger.error("Unable to get Upload URL from Broadcastify Calls")
-        return False
+        module_logger.info("Uploading Call Audio")
+        # Assuming the API returns a direct URL for the PUT request in the response body
+        try:
+            upload_url = upload_request_response.json().get('uploadUrl')
+            if not upload_url:
+                module_logger.error("Upload URL not found in the response.")
+                return False
+        except ValueError:
+            module_logger.error("Failed to parse response JSON.")
+            return False
 
-    try:
-        with open(m4a_file_path, 'rb') as up_file:
-            file_data = up_file.read()
-    except IOError as e:
-        module_logger.critical(f"Failed to read the audio file: {e}")
-        return False
+    # Use 'with' to ensure the file is properly closed after its suite finishes
+    with open(m4a_file_path, 'rb') as up_file:
+        upload_response = send_request('PUT', upload_url, data=up_file, headers={'Content-Type': 'audio/aac'})
+        if not upload_response:
+            module_logger.debug("Uploading Audio to Broadcastify Calls Failed.")
+            return False
 
-    upload_response = send_request('PUT', upload_url, headers={'Content-Type': 'audio/aac'}, body=file_data)
-    if not upload_response:
-        module_logger.debug("Uploading Audio to Broadcastify Calls Failed.")
-        return False
-
-    if upload_response.status_code == 200:
         module_logger.info("Broadcastify Calls Audio Upload Complete")
         return True
-
-    module_logger.debug("Uploading Audio to Broadcastify Calls Failed.")
-    return False
