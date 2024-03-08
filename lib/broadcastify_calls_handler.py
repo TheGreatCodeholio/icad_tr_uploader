@@ -44,7 +44,7 @@ def upload_to_broadcastify_calls(broadcastify_config, m4a_file_path, call_data):
         module_logger.info("Uploading Call Audio")
         # Assuming the API returns a direct URL for the PUT request in the response body
         try:
-            upload_url = upload_request_response.json().get('uploadUrl')
+            upload_url = upload_request_response.text.split(' ')[1]
             if not upload_url:
                 module_logger.error("Upload URL not found in the response.")
                 return False
