@@ -34,10 +34,8 @@ def upload_to_broadcastify_calls(broadcastify_config, m4a_file_path, call_data):
     }
 
     try:
-        with open(metadata_path, 'rb') as metadata_file, open(m4a_file_path, 'rb') as audio_file:
+        with open(m4a_file_path, 'rb') as audio_file:
             files = {
-                'metadata': (os.path.basename(metadata_path), metadata_file, 'application/json'),
-                'audio': (os.path.basename(m4a_file_path), audio_file, 'audio/aac'),
                 'callDuration': (None, str(call_data["call_length"])),
                 'systemId': (None, str(broadcastify_config["system_id"])),
                 'apiKey': (None, broadcastify_config["api_key"]),
@@ -46,6 +44,8 @@ def upload_to_broadcastify_calls(broadcastify_config, m4a_file_path, call_data):
                 'freq': call_data["freq"],
                 'enc': 'm4a'
             }
+
+            print(files)
 
             response = requests.post(broadcastify_url, headers, files=files)
             module_logger.debug(response.text)
