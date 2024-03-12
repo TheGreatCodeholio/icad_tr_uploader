@@ -35,7 +35,7 @@ def upload_to_broadcastify_calls(broadcastify_config, m4a_file_path, call_data):
                 'callDuration': (None, str(call_data["call_length"])),
                 'systemId': (None, str(broadcastify_config["system_id"])),
                 'apiKey': (None, broadcastify_config["api_key"]),
-                'ts': call_data["timestamp"],
+                'ts': call_data['start_time'],
                 'freq': call_data["freq"],
                 'enc': 'm4a'
             }
