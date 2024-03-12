@@ -69,9 +69,9 @@ def upload_to_broadcastify_calls(broadcastify_config, m4a_file_path, call_data):
             }
 
             # Reuse the send_request function for the PUT request
-            upload_response = requests.put(upload_url,  headers={'Content-Type': 'audio/aac'}, data=audio_file.read())
-            module_logger.debug(upload_response.text)
-            if not upload_response:
+            upload_response = requests.put(upload_url,  headers={'Content-Type': 'audio/aac'}, files=fields)
+            module_logger.debug(upload_response)
+            if upload_response.status_code != 200:
                 module_logger.error("Failed to post call to Broadcastify Calls AWS Failed.")
                 return False
 
