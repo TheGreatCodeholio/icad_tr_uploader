@@ -45,7 +45,7 @@ def upload_to_broadcastify_calls(broadcastify_config, m4a_file_path, call_data):
                 'apiKey': (None, broadcastify_config["api_key"]),
             }
 
-            module_logger.debug()
+            module_logger.debug(files)
 
             response = requests.post(broadcastify_url, files=files)
             if response.status_code != 200:
