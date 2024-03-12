@@ -38,12 +38,12 @@ def upload_to_broadcastify_calls(broadcastify_config, m4a_file_path, call_data):
     try:
         with open(m4a_file_path, 'rb') as audio_file:
             files = {
-                'apiKey': (None, broadcastify_config["api_key"]),
-                'systemId': (None, str(broadcastify_config["system_id"])),
+                'apiKey': str(broadcastify_config["api_key"]),
+                'systemId': str(broadcastify_config["system_id"]),
                 'ts': str(call_data['start_time']),
                 'tg': str(call_data['talkgroup']),
                 'freq': str(call_data["freq"]),
-                'callDuration': (None, str(call_data["call_length"]))
+                'callDuration': str(call_data["call_length"])
             }
 
             module_logger.debug(files)
