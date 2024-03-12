@@ -1,3 +1,4 @@
+import base64
 import logging
 import os
 import requests
@@ -54,8 +55,13 @@ def upload_to_broadcastify_calls(broadcastify_config, m4a_file_path, call_data):
                 module_logger.error("Failed to parse response from Broadcastify as JSON.")
                 return False
 
+            base_64 = base64.b64encode(audio_file.read()).decode("utf-8")
+            fields = {
+                "filefield": (os.path.basename(m4a_file_path), base_64, 'audio/aac')
+            }
+
             # Reuse the send_request function for the PUT request
-            upload_response = send_request('PUT', upload_url, data=audio_file, headers={'Content-Type': 'audio/aac'})
+            upload_response = send_request('PUT', upload_url, fields=fields)
             if not upload_response:
                 module_logger.error("Uploading Audio to Broadcastify Calls Failed.")
                 return False
