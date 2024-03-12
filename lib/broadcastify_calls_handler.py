@@ -61,7 +61,7 @@ def upload_to_broadcastify_calls(broadcastify_config, m4a_file_path, call_data):
             }
 
             # Reuse the send_request function for the PUT request
-            upload_response = send_request('PUT', upload_url, fields=fields)
+            upload_response = send_request('PUT', upload_url, files=fields)
             if not upload_response:
                 module_logger.error("Uploading Audio to Broadcastify Calls Failed.")
                 return False
