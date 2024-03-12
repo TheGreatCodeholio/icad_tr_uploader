@@ -7,6 +7,12 @@
       "archive_extensions": [".mp3", ".m4a", ".json", ".wav", ".log"],
       "mp3_bitrate": "32",
       "m4a_bitrate": "32",
+      "transcribe": {
+        "enabled": 0,
+        "talkgroups": [1, 2, 4],
+        "api_url": "",
+        "api_key": ""
+      },
       "rdio_systems": [
         {
           "enabled": 0,

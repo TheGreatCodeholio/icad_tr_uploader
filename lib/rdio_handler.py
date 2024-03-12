@@ -3,7 +3,7 @@ import os
 import requests
 import logging
 
-module_logger = logging.getLogger('ap_tr_uploader.rdio_uploader')
+module_logger = logging.getLogger('icad_tr_uploader.rdio_uploader')
 
 
 def upload_to_rdio(rdio_data, m4a_path, json_path):

@@ -46,7 +46,7 @@ def upload_to_broadcastify_calls(broadcastify_config, m4a_file_path, call_data):
 
             # Assuming the response contains JSON with a direct URL for uploading
             try:
-                upload_url = response.json().get('uploadUrl')
+                upload_url = response.text.split(" ")[1]
                 if not upload_url:
                     module_logger.error("Upload URL not found in the Broadcastify response.")
                     return False

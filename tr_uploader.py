@@ -9,6 +9,7 @@ from lib.icad_tone_detect_handler import upload_to_icad
 from lib.logging_handler import CustomLogger
 from lib.openmhz_handler import upload_to_openmhz
 from lib.rdio_handler import upload_to_rdio
+from lib.transcribe_handler import upload_to_transcribe
 
 
 def parse_arguments():
@@ -85,6 +86,7 @@ def main():
 
     mp3_exists = os.path.isfile(mp3_path)
     m4a_exists = os.path.isfile(m4a_path)
+    wav_exists = os.path.isfile(wav_path)
 
     try:
         call_data = load_call_data(logger, json_path)
@@ -100,11 +102,26 @@ def main():
 
     # TODO Some Sort of Check For Duplicate Transmissions based on timestamp and length
 
+    if system_config["transcribe"]["enabled"] == 1:
+        if wav_exists:
+            if call_data.get("talkgroup", 0) not in system_config["transcribe"]["talkgroups"] and "*" not in system_config["transcribe"]["talkgroups"]:
+                logger.info(f"Not Sending to Transcribe API not in allowed talkgroups.")
+            else:
+                upload_success = upload_to_transcribe(system_config["transcribe"], wav_path)
+                if not upload_success:
+                    logger.error("Failed to upload to Transcribe API.")
+                else:
+                    logger.info(
+                        f"Successfully uploaded to Transcribe API: {system_config['transcribe']['api_url']}")
+        else:
+            logger.warning(f"No WAV file can't send to Transcribe API")
+
+
     # Upload to iCAD Tone Detect
     if system_config["icad_tone_detect"]["enabled"] == 1:
         if mp3_exists:
             if call_data.get("talkgroup", 0) not in system_config["icad_tone_detect"]["talkgroups"]:
-                logger.info(f"Not Sending to Tone Detect API not in talkgroups.")
+                logger.info(f"Not Sending to Tone Detect API not in allowed talkgroups.")
             else:
                 upload_success = upload_to_icad(system_config["icad_tone_detect"], mp3_path, call_data)
                 if not upload_success:
