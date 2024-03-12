@@ -1,6 +1,8 @@
 import base64
 import logging
 import os
+import time
+
 import requests
 
 module_logger = logging.getLogger('icad_tr_uploader.broadcastify_calls')
@@ -36,13 +38,12 @@ def upload_to_broadcastify_calls(broadcastify_config, m4a_file_path, call_data):
     try:
         with open(m4a_file_path, 'rb') as audio_file:
             files = {
-                'callDuration': (None, str(call_data["call_length"])),
-                'systemId': (None, str(broadcastify_config["system_id"])),
                 'apiKey': (None, broadcastify_config["api_key"]),
-                'tg': call_data['talkgroup'],
-                'ts': call_data['start_time'],
-                'freq': call_data["freq"],
-                'enc': 'm4a'
+                'systemId': (None, str(broadcastify_config["system_id"])),
+                'ts': str(time.time()),
+                'tg': str(call_data['talkgroup']),
+                'freq': str(call_data["freq"]),
+                'callDuration': (None, str(call_data["call_length"]))
             }
 
             print(files)
