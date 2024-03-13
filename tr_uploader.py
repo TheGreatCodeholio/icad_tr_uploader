@@ -1,6 +1,7 @@
 import json
 import argparse
 import os
+from datetime import datetime
 from pathlib import Path
 
 from lib.audio_file_handler import archive_files, clean_files, convert_wav_mp3
@@ -70,7 +71,7 @@ def load_call_data(logger, json_path):
         with open(json_path, 'r') as fj:
             call_data = json.load(fj)
             call_data["transcript"] = None
-            call_data["filename"] = os.path.basename(json_path.replace('.json', '.wav'))
+            call_data["audio_url"] = None
         logger.info(f'Successfully loaded call json.')
         return call_data
     except FileNotFoundError:
@@ -127,6 +128,12 @@ def main():
     save_call_json(json_path, call_data)
 
     if system_config["icad_player"]["enabled"] == 1:
+        current_date = datetime.now()
+
+        # Create folder structure using current date
+        folder_path = os.path.join(str(current_date.year), str(current_date.month), str(current_date.day), os.path.basename(wav_path))
+        call_data["audio_url"] = f"{system_config['icad_player']['audio_base_url']}/{folder_path}"
+
         if call_data.get("talkgroup", 0) not in system_config["icad_player"]["talkgroups"] and "*" not in \
                 system_config["icad_player"]["talkgroups"]:
             logger.info(f"Not Sending to iCAD Player talkgroup not in allowed talkgroups.")
