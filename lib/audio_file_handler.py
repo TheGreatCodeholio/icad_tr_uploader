@@ -44,11 +44,12 @@ def convert_wav_mp3(wav_file_path):
     return True
 
 
-def archive_files(files, archive_path):
+def archive_files(files, filtered_files, archive_path):
     """
     Archives a list of files into a directory structure based on the current date.
 
-    :param files: List of file paths to archive.
+    :param files: List of all files associated with audio transmission.
+    :param filtered_files: List of file paths to archive, filtered by extensions from system config.
     :param archive_path: Base path where the archive directories will be created.
     """
     # Get the current date
@@ -58,17 +59,21 @@ def archive_files(files, archive_path):
     folder_path = os.path.join(archive_path, str(current_date.year), str(current_date.month), str(current_date.day))
     os.makedirs(folder_path, exist_ok=True)
 
-    for file in files:
+    for file in filtered_files:
         try:
             file_path = Path(file)
             if file_path.is_file():
                 # Move file to the archive folder
-                shutil.move(str(file_path), folder_path)
+                shutil.move(str(file_path), os.path.join(folder_path, os.path.basename(file_path)))
                 module_logger.debug(f"File {file} archived successfully to {folder_path}.")
             else:
                 module_logger.error(f"File {file} does not exist and cannot be archived.")
         except Exception as e:
             module_logger.error(f"Unable to archive file {file}. Error: {e}")
+
+    for file in files:
+        if os.path.isfile(file):
+            os.remove(file)
 
 
 def clean_files(archive_path, archive_days):

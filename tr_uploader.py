@@ -177,7 +177,7 @@ def main():
     if system_config["archive_days"] > 0:
         filtered_files = [file for file in files if
                           any(file.endswith(ext) for ext in system_config.get("archive_extensions", []))]
-        archive_files(filtered_files, system_config["archive_path"])
+        archive_files(files, filtered_files, system_config["archive_path"])
         clean_files(system_config["archive_path"], system_config["archive_days"])
     elif system_config["archive_days"] == 0:
         pass
