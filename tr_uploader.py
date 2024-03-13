@@ -5,6 +5,7 @@ from pathlib import Path
 
 from lib.audio_file_handler import archive_files, clean_files, convert_wav_mp3
 from lib.broadcastify_calls_handler import upload_to_broadcastify_calls
+from lib.icad_player_handler import upload_to_icad_player
 from lib.icad_tone_detect_handler import upload_to_icad
 from lib.logging_handler import CustomLogger
 from lib.openmhz_handler import upload_to_openmhz
@@ -28,6 +29,7 @@ def convert_audio(logger, wav_file_path):
         return False
     else:
         return True
+
 
 def get_paths(args):
     root_path = os.getcwd()
@@ -58,10 +60,16 @@ def load_config(config_path, app_name, system_name, log_path):
         exit(0)
 
 
+def save_call_json(json_file_path, call_data):
+    with open(json_file_path, 'w') as f:
+        json.dump(call_data, f, indent=4, sort_keys=True)
+
+
 def load_call_data(logger, json_path):
     try:
         with open(json_path, 'r') as fj:
             call_data = json.load(fj)
+            call_data["transcript"] = None
         logger.info(f'Successfully loaded call json.')
         return call_data
     except FileNotFoundError:
@@ -104,18 +112,25 @@ def main():
 
     if system_config["transcribe"]["enabled"] == 1:
         if wav_exists:
-            if call_data.get("talkgroup", 0) not in system_config["transcribe"]["talkgroups"] and "*" not in system_config["transcribe"]["talkgroups"]:
-                logger.info(f"Not Sending to Transcribe API not in allowed talkgroups.")
+            if call_data.get("talkgroup", 0) not in system_config["transcribe"]["talkgroups"] and "*" not in \
+                    system_config["transcribe"]["talkgroups"]:
+                logger.info(f"Not Sending to Transcribe API talkgroup not in allowed talkgroups.")
             else:
-                upload_success = upload_to_transcribe(system_config["transcribe"], wav_path)
-                if not upload_success:
-                    logger.error("Failed to upload to Transcribe API.")
-                else:
-                    logger.info(
-                        f"Successfully uploaded to Transcribe API: {system_config['transcribe']['api_url']}")
+                transcribe_json = upload_to_transcribe(system_config["transcribe"], wav_path)
+                if transcribe_json:
+                    call_data["transcript"] = transcribe_json
+
         else:
             logger.warning(f"No WAV file can't send to Transcribe API")
 
+    save_call_json(json_path, call_data)
+
+    if system_config["icad_player"]["enabled"] == 1:
+        if call_data.get("talkgroup", 0) not in system_config["icad_player"]["talkgroups"] and "*" not in \
+                system_config["icad_player"]["talkgroups"]:
+            logger.info(f"Not Sending to iCAD Player talkgroup not in allowed talkgroups.")
+        else:
+            upload_to_icad_player(system_config["icad_player"], call_data)
 
     # Upload to iCAD Tone Detect
     if system_config["icad_tone_detect"]["enabled"] == 1:
@@ -124,11 +139,7 @@ def main():
                 logger.info(f"Not Sending to Tone Detect API not in allowed talkgroups.")
             else:
                 upload_success = upload_to_icad(system_config["icad_tone_detect"], mp3_path, call_data)
-                if not upload_success:
-                    logger.error("Failed to upload to iCAD Tone Detect API.")
-                else:
-                    logger.info(
-                        f"Successfully uploaded to iCAD Tone Detect API: {system_config['icad_tone_detect']['icad_url']}")
+
         else:
             logger.warning(f"No MP3 file can't send to iCAD Tone Detect API")
 
@@ -164,7 +175,8 @@ def main():
     files = [log_path, json_path, mp3_path, m4a_path, wav_path]
 
     if system_config["archive_days"] > 0:
-        filtered_files = [file for file in files if any(file.endswith(ext) for ext in system_config.get("archive_extensions", []))]
+        filtered_files = [file for file in files if
+                          any(file.endswith(ext) for ext in system_config.get("archive_extensions", []))]
         archive_files(filtered_files, system_config["archive_path"])
         clean_files(system_config["archive_path"], system_config["archive_days"])
     elif system_config["archive_days"] == 0:
@@ -180,6 +192,7 @@ def main():
                     logger.error(f"Unable to remove file {file}. Error: {str(e)}")
             else:
                 logger.error(f"File {file} does not exist.")
+
 
 if __name__ == "__main__":
     main()

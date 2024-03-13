@@ -13,6 +13,12 @@
         "api_url": "",
         "api_key": ""
       },
+      "icad_player": {
+        "enabled": 0,
+        "talkgroups": [1, 2, 8],
+        "api_url": "",
+        "api_key": ""
+      },
       "rdio_systems": [
         {
           "enabled": 0,
