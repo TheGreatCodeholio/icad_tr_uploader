@@ -128,17 +128,20 @@ def main():
     save_call_json(json_path, call_data)
 
     if system_config["icad_player"]["enabled"] == 1:
-        current_date = datetime.now()
+        if mp3_exists:
+            current_date = datetime.now()
 
-        # Create folder structure using current date
-        folder_path = os.path.join(str(current_date.year), str(current_date.month), str(current_date.day), os.path.basename(wav_path))
-        call_data["audio_url"] = f"{system_config['icad_player']['audio_base_url']}/{folder_path}"
+            # Create folder structure using current date
+            folder_path = os.path.join(str(current_date.year), str(current_date.month), str(current_date.day), os.path.basename(mp3_path))
+            call_data["audio_url"] = f"{system_config['icad_player']['audio_base_url']}/{folder_path}"
 
-        if call_data.get("talkgroup", 0) not in system_config["icad_player"]["talkgroups"] and "*" not in \
-                system_config["icad_player"]["talkgroups"]:
-            logger.info(f"Not Sending to iCAD Player talkgroup not in allowed talkgroups.")
+            if call_data.get("talkgroup", 0) not in system_config["icad_player"]["talkgroups"] and "*" not in \
+                    system_config["icad_player"]["talkgroups"]:
+                logger.info(f"Not Sending to iCAD Player talkgroup not in allowed talkgroups.")
+            else:
+                upload_to_icad_player(system_config["icad_player"], call_data)
         else:
-            upload_to_icad_player(system_config["icad_player"], call_data)
+            logger.warning(f"No MP3 file can't send to iCAD Tone Detect API")
 
     # Upload to iCAD Tone Detect
     if system_config["icad_tone_detect"]["enabled"] == 1:
