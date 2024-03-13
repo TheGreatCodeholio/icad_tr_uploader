@@ -5,7 +5,7 @@ module_logger = logging.getLogger('icad_tr_uploader.transcribe')
 
 
 def upload_to_transcribe(transcribe_config, audio_file_path):
-    url = transcribe_config['transcribe_url']
+    url = transcribe_config['api_url']
     module_logger.info(f'Uploading To Transcribe API: {url}')
 
     # Use context managers to automatically handle file opening and closing
