@@ -70,6 +70,7 @@ def load_call_data(logger, json_path):
         with open(json_path, 'r') as fj:
             call_data = json.load(fj)
             call_data["transcript"] = None
+            call_data["filename"] = os.path.basename(json_path.replace('.json', '.wav'))
         logger.info(f'Successfully loaded call json.')
         return call_data
     except FileNotFoundError:
