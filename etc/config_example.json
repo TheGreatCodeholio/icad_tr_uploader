@@ -74,16 +74,19 @@
         "system_id": 0,
         "api_key": ""
       },
-      "icad_tone_detect": {
-        "enabled": 0,
-        "talkgroups": [
-          1,
-          2,
-          4
-        ],
-        "icad_url": "https://detect.example.com/tone_detect",
-        "icad_api_key": ""
-      },
+      "icad_tone_detect": [
+        {
+          "enabled": 0,
+          "legacy": 0,
+          "talkgroups": [
+            1,
+            2,
+            4
+          ],
+          "icad_url": "https://detect.example.com/tone_detect",
+          "icad_api_key": ""
+        }
+      ],
       "talkgroup_config": {
         "1": {
           "language": "en",

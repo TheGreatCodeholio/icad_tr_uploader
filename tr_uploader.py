@@ -8,7 +8,7 @@ from pathlib import Path
 from lib.audio_file_handler import archive_files, clean_files
 from lib.broadcastify_calls_handler import upload_to_broadcastify_calls
 from lib.icad_player_handler import upload_to_icad_player
-from lib.icad_tone_detect_handler import upload_to_icad
+from lib.icad_tone_detect_handler import upload_to_icad, upload_to_icad_legacy
 from lib.logging_handler import CustomLogger
 from lib.openmhz_handler import upload_to_openmhz
 from lib.rdio_handler import upload_to_rdio
@@ -120,7 +120,7 @@ def main():
 
             if talkgroup_decimal not in system_config.get("transcribe", {}).get("talkgroups",
                                                                                 []) and "*" not in system_config.get(
-                    "transcribe", {}).get("talkgroups", []):
+                "transcribe", {}).get("talkgroups", []):
                 logger.info(f"Not Sending to Transcribe API talkgroup not in allowed talkgroups.")
             else:
                 talkgroup_config = system_config.get("talkgroup_config", {}).get(str(talkgroup_decimal))
@@ -134,14 +134,28 @@ def main():
             logger.warning(f"No M4A file can't send to Transcribe API")
 
     # Upload to iCAD Tone Detect
-    if system_config.get("icad_tone_detect", {}).get("enabled", 0) == 1:
-        if m4a_exists:
-            if talkgroup_decimal not in system_config.get("icad_tone_detect", {}).get("talkgroups", []):
-                logger.info(f"Not Sending to Tone Detect API not in allowed talkgroups.")
-            else:
-                upload_success = upload_to_icad(system_config.get("icad_tone_detect", {}), m4a_path, call_data)
+    for icad_detect in system_config.get("icad_tone_detect", []):
+        if icad_detect.get("enabled", 0) == 1:
+            if not m4a_exists:
+                logger.warning(f"No M4A file can't send to iCAD Tone Detect")
+                continue
+            try:
+                if icad_detect.get("legacy", 0) == 1:
+                    icad_result = upload_to_icad_legacy(icad_detect, m4a_path, call_data)
+                else:
+                    icad_result = upload_to_icad(icad_detect, m4a_path, json_path)
+
+                if icad_result:
+                    logger.info(f"Successfully uploaded to iCAD Detect server: {icad_detect.get('icad_url')}")
+                else:
+                    raise Exception('Unknown Error')
+            except Exception as e:
+                logger.error(f"Failed to upload to iCAD Detect server: {icad_detect.get('icad_url')}. Error: {str(e)}",
+                             exc_info=True)
+                continue
         else:
-            logger.warning(f"No M4A file can't send to iCAD Tone Detect API")
+            logger.warning(f"iCAD Detect is disabled: {icad_detect.get('icad_url')}")
+            continue
 
     save_call_json(json_path, call_data)
 
@@ -150,7 +164,7 @@ def main():
 
             if talkgroup_decimal not in system_config.get("icad_player", {}).get("talkgroups",
                                                                                  []) and "*" not in system_config.get(
-                    "icad_player", {}).get("talkgroups", []):
+                "icad_player", {}).get("talkgroups", []):
                 logger.info(f"Not Sending to iCAD Player talkgroup not in allowed talkgroups.")
             else:
                 upload_to_icad_player(system_config.get("icad_player", {}), call_data)
