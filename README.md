@@ -2,7 +2,7 @@
 Script to upload audio files from trunk recorder to various services.
 
 ## Requirements
-- Python < 3.6
+- Python < 3.10
 
 **Python Libraries**
 - requests 
