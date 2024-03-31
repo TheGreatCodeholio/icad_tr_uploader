@@ -5,43 +5,8 @@ from pathlib import Path
 from datetime import datetime
 import time
 import shutil
-import traceback
 
 module_logger = logging.getLogger('icad_tr_uploader.audio_file')
-
-
-def convert_wav_mp3(wav_file_path):
-    """
-    Converts a WAV file to an MP3 file using ffmpeg, ensuring the output MP3 is mono and has a bitrate of 32k.
-
-    :param wav_file_path: The file path of the WAV file to be converted.
-    :return: True if conversion is successful, False otherwise.
-    """
-    if not os.path.isfile(wav_file_path):
-        module_logger.error(f"WAV file does not exist: {wav_file_path}")
-        return False
-
-    mp3_file_path = wav_file_path.replace('.wav', '.mp3')
-    module_logger.info(f'Converting WAV to Mono MP3 at 32k: {wav_file_path} to {mp3_file_path}')
-
-    command = [
-        "ffmpeg", "-y", "-i", wav_file_path, "-vn", "-ar", "22050", "-ac", "1", "-b:a", "32k", mp3_file_path
-    ]
-
-    try:
-        output = subprocess.check_output(command, stderr=subprocess.STDOUT, text=True)
-        module_logger.debug(output)
-        module_logger.info(f"Successfully converted WAV to MP3: {wav_file_path} to {mp3_file_path}")
-    except subprocess.CalledProcessError as e:
-        error_message = f"Failed to convert WAV to MP3: {e.output}"
-        module_logger.error(error_message)
-        return False
-    except Exception as e:
-        error_message = f"An unexpected error occurred during conversion: {e}"
-        module_logger.error(error_message, exc_info=True)
-        return False
-
-    return True
 
 
 def archive_files(files, filtered_files, archive_path):
@@ -53,7 +18,7 @@ def archive_files(files, filtered_files, archive_path):
     :param archive_path: Base path where the archive directories will be created.
     """
     # Get the current date
-    current_date = datetime.now()
+    current_date = datetime.utcnow()
 
     # Create folder structure using current date
     folder_path = os.path.join(archive_path, str(current_date.year), str(current_date.month), str(current_date.day))

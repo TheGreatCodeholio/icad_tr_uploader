@@ -4,7 +4,7 @@ import logging
 module_logger = logging.getLogger('icad_tr_uploader.transcribe')
 
 
-def upload_to_transcribe(transcribe_config, audio_file_path, json_file_path):
+def upload_to_transcribe(transcribe_config, audio_file_path, json_file_path, talkgroup_config=None):
     url = transcribe_config['api_url']
     module_logger.info(f'Uploading To Transcribe API: {url}')
 
@@ -15,7 +15,15 @@ def upload_to_transcribe(transcribe_config, audio_file_path, json_file_path):
                 'audioFile': af,
                 'jsonFile': jf
             }
-            response = requests.post(url, files=data)
+
+            if talkgroup_config:
+                config_data = {
+                    'whisper_config_data': talkgroup_config
+                }
+            else:
+                config_data = None
+
+            response = requests.post(url, files=data, data=config_data)
             response.raise_for_status()  # This will raise an error for 4xx and 5xx responses
             response_json = response.json()
             module_logger.info(f'Successfully received transcript data from: {url}')

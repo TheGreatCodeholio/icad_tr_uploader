@@ -16,10 +16,8 @@ def upload_to_openmhz(openmhz, m4a_path, call_data):
         short_name = openmhz.get('short_name')
 
         if not api_key or not short_name:
-            raise ValueError("API Key or Short Name not provided in the configuration.")
-
-        call_data["short_name"] = short_name
-        call_data["api_key"] = api_key
+            module_logger.error("API Key or Short Name not provided in the configuration.")
+            return False
 
         source_list = []
         if 'srcList' in call_data and len(call_data['srcList']) != 0:

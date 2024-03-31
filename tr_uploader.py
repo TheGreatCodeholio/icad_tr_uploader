@@ -1,16 +1,18 @@
 import json
 import argparse
 import os
+import traceback
 from datetime import datetime
 from pathlib import Path
 
-from lib.audio_file_handler import archive_files, clean_files, convert_wav_mp3
+from lib.audio_file_handler import archive_files, clean_files
 from lib.broadcastify_calls_handler import upload_to_broadcastify_calls
 from lib.icad_player_handler import upload_to_icad_player
 from lib.icad_tone_detect_handler import upload_to_icad
 from lib.logging_handler import CustomLogger
 from lib.openmhz_handler import upload_to_openmhz
 from lib.rdio_handler import upload_to_rdio
+from lib.remote_storage_handler import get_storage, GoogleCloudStorage, SCPStorage, AWSS3Storage
 from lib.transcribe_handler import upload_to_transcribe
 
 
@@ -23,26 +25,16 @@ def parse_arguments():
     return args
 
 
-def convert_audio(logger, wav_file_path):
-    mp3_res = convert_wav_mp3(wav_file_path)
-    if not mp3_res:
-        logger.error("Failed to Convert Audio to Mp3")
-        return False
-    else:
-        return True
-
-
 def get_paths(args):
     root_path = os.getcwd()
     config_file = 'config.json'
     config_path = os.path.join(f'{root_path}/etc', config_file)
     wav_path = args.audio_wav
-    mp3_path = wav_path.replace(".wav", ".mp3")
     m4a_path = wav_path.replace(".wav", ".m4a")
     log_path = wav_path.replace(".wav", ".log")
     json_path = wav_path.replace(".wav", ".json")
     system_name = args.sys_name
-    return config_path, wav_path, mp3_path, m4a_path, log_path, json_path, system_name
+    return config_path, wav_path, m4a_path, log_path, json_path, system_name
 
 
 def load_config(config_path, app_name, system_name, log_path):
@@ -72,127 +64,142 @@ def load_call_data(logger, json_path):
             call_data = json.load(fj)
             call_data["transcript"] = None
             call_data["audio_url"] = None
+            call_data["tone_detection"] = None
         logger.info(f'Successfully loaded call json.')
         return call_data
     except FileNotFoundError:
         print(f'JSON Call Data file {json_path} not found.')
-        return False
+        return None
     except json.JSONDecodeError:
         print(f'JSON Call Data file {json_path} is not in valid JSON format.')
-        return False
+        return None
 
 
 def main():
     app_name = "icad_tr_uploader"
     args = parse_arguments()
-    config_path, wav_path, mp3_path, m4a_path, log_path, json_path, system_name = get_paths(args)
+    config_path, wav_path, m4a_path, log_path, json_path, system_name = get_paths(args)
     config_data, logger, system_config = load_config(config_path, app_name, system_name, log_path)
 
-    convert_result = convert_audio(logger, wav_path)
-
-    # check if mp3 exists
-    if not convert_result:
-        exit(1)
-
-    mp3_exists = os.path.isfile(mp3_path)
     m4a_exists = os.path.isfile(m4a_path)
     wav_exists = os.path.isfile(wav_path)
 
     try:
         call_data = load_call_data(logger, json_path)
+        talkgroup_decimal = call_data.get("talkgroup", 0)
         if not call_data:
             logger.error("Could Not Load Call Data JSON")
             exit(1)
     except Exception as e:
-        logger.error(e, exc_info=True)
-        logger.error("Could Not Load Call Data JSON")
+        traceback.print_exc()
+        logger.error(f"Could Not Load Call Data JSON: {e}")
         exit(1)
 
     logger.debug(call_data)
 
     # TODO Some Sort of Check For Duplicate Transmissions based on timestamp and length
 
-    if system_config["transcribe"]["enabled"] == 1:
-        if wav_exists:
-            if call_data.get("talkgroup", 0) not in system_config["transcribe"]["talkgroups"] and "*" not in \
-                    system_config["transcribe"]["talkgroups"]:
+    # upload to remote storage
+    storage_config = system_config.get("file_storage", {})
+
+    if storage_config.get("enabled", 0) == 1:
+        if m4a_exists:
+            storage_type = get_storage(storage_config)
+            if storage_type:
+                try:
+                    upload_response = storage_type.upload_file(m4a_path)
+                    call_data["audio_url"] = upload_response
+                except Exception as e:
+                    traceback.print_exc()
+                    logger.error(f'File <<Upload>> <<failed>> File Save Error: {e}')
+        else:
+            logger.warning(f"No M4A file can't send to Remote Storage")
+
+    if system_config.get("transcribe", {}).get("enabled", 0) == 1:
+        if m4a_exists:
+
+            if talkgroup_decimal not in system_config.get("transcribe", {}).get("talkgroups",
+                                                                                []) and "*" not in system_config.get(
+                    "transcribe", {}).get("talkgroups", []):
                 logger.info(f"Not Sending to Transcribe API talkgroup not in allowed talkgroups.")
             else:
-                transcribe_json = upload_to_transcribe(system_config["transcribe"], wav_path, json_path)
+                talkgroup_config = system_config.get("talkgroup_config", {}).get(str(talkgroup_decimal))
+
+                transcribe_json = upload_to_transcribe(system_config.get("transcribe", {}), m4a_path, json_path,
+                                                       talkgroup_config)
                 if transcribe_json:
                     call_data["transcript"] = transcribe_json
 
         else:
-            logger.warning(f"No WAV file can't send to Transcribe API")
+            logger.warning(f"No M4A file can't send to Transcribe API")
+
+    # Upload to iCAD Tone Detect
+    if system_config.get("icad_tone_detect", {}).get("enabled", 0) == 1:
+        if m4a_exists:
+            if talkgroup_decimal not in system_config.get("icad_tone_detect", {}).get("talkgroups", []):
+                logger.info(f"Not Sending to Tone Detect API not in allowed talkgroups.")
+            else:
+                upload_success = upload_to_icad(system_config.get("icad_tone_detect", {}), m4a_path, call_data)
+        else:
+            logger.warning(f"No M4A file can't send to iCAD Tone Detect API")
 
     save_call_json(json_path, call_data)
 
-    if system_config["icad_player"]["enabled"] == 1:
-        if mp3_exists:
-            current_date = datetime.now()
+    if system_config.get("icad_player", {}).get("enabled", 0) == 1:
+        if m4a_exists and call_data.get('audio_url', None):
 
-            # Create folder structure using current date
-            folder_path = os.path.join(str(current_date.year), str(current_date.month), str(current_date.day), os.path.basename(mp3_path))
-            call_data["audio_url"] = f"{system_config['icad_player']['audio_base_url']}/{folder_path}"
-
-            if call_data.get("talkgroup", 0) not in system_config["icad_player"]["talkgroups"] and "*" not in \
-                    system_config["icad_player"]["talkgroups"]:
+            if talkgroup_decimal not in system_config.get("icad_player", {}).get("talkgroups",
+                                                                                 []) and "*" not in system_config.get(
+                    "icad_player", {}).get("talkgroups", []):
                 logger.info(f"Not Sending to iCAD Player talkgroup not in allowed talkgroups.")
             else:
-                upload_to_icad_player(system_config["icad_player"], call_data)
+                upload_to_icad_player(system_config.get("icad_player", {}), call_data)
         else:
-            logger.warning(f"No MP3 file can't send to iCAD Tone Detect API")
-
-    # Upload to iCAD Tone Detect
-    if system_config["icad_tone_detect"]["enabled"] == 1:
-        if mp3_exists:
-            if call_data.get("talkgroup", 0) not in system_config["icad_tone_detect"]["talkgroups"]:
-                logger.info(f"Not Sending to Tone Detect API not in allowed talkgroups.")
-            else:
-                upload_success = upload_to_icad(system_config["icad_tone_detect"], mp3_path, call_data)
-
-        else:
-            logger.warning(f"No MP3 file can't send to iCAD Tone Detect API")
+            logger.warning(f"No M4A file can't send to iCAD Tone Detect API")
 
     # Upload to RDIO
-    for rdio in system_config["rdio_systems"]:
-        if rdio["enabled"] == 1:
+    for rdio in system_config.get("rdio_systems", []):
+        if rdio.get("enabled", 0) == 1:
             if not m4a_exists:
                 logger.warning(f"No M4A file can't send to RDIO")
                 continue
             try:
                 upload_to_rdio(rdio, m4a_path, json_path)
-                logger.info(f"Successfully uploaded to RDIO server: {rdio['rdio_url']}")
+                logger.info(f"Successfully uploaded to RDIO server: {rdio.get('rdio_url')}")
             except Exception as e:
-                logger.error(f"Failed to upload to RDIO server: {rdio['rdio_url']}. Error: {str(e)}", exc_info=True)
+                logger.error(f"Failed to upload to RDIO server: {rdio.get('rdio_url')}. Error: {str(e)}", exc_info=True)
                 continue
         else:
-            logger.warning(f"RDIO system is disabled: {rdio['rdio_url']}")
+            logger.warning(f"RDIO system is disabled: {rdio.get('rdio_url')}")
             continue
 
     # Upload to OpenMHZ
-    if system_config["openmhz"]["enabled"] == 1:
+    if system_config.get("openmhz", {}).get("enabled", 0) == 1:
         if m4a_exists:
-            openmhz_result = upload_to_openmhz(system_config["openmhz"], m4a_path, call_data)
+            openmhz_result = upload_to_openmhz(system_config.get("openmhz", {}), m4a_path, call_data)
         else:
             logger.warning(f"No M4A file can't send to OpenMHZ")
 
-    if system_config["broadcastify_calls"]["enabled"] == 1:
+    if system_config.get("broadcastify_calls", {}).get("enabled", 0) == 1:
         if m4a_exists:
-            bcfy_calls_result = upload_to_broadcastify_calls(system_config["broadcastify_calls"], m4a_path, call_data)
+            bcfy_calls_result = upload_to_broadcastify_calls(system_config.get("broadcastify_calls", {}), m4a_path,
+                                                             call_data)
         else:
             logger.warning(f"No M4A file can't send to Broadcastify Calls")
 
-    files = [log_path, json_path, mp3_path, m4a_path, wav_path]
+    files = [log_path, json_path, m4a_path, wav_path]
 
-    if system_config["archive_days"] > 0:
+    archive_days = storage_config.get("archive_days", 0)
+    archive_path = system_config.get("archive_path", None)
+
+    if archive_days > 0:
         filtered_files = [file for file in files if
                           any(file.endswith(ext) for ext in system_config.get("archive_extensions", []))]
-        archive_files(files, filtered_files, system_config["archive_path"])
-        clean_files(system_config["archive_path"], system_config["archive_days"])
-    elif system_config["archive_days"] == 0:
+        archive_files(files, filtered_files, archive_path)
+        clean_files(archive_path, archive_days)
+    elif archive_days == 0:
         pass
-    elif system_config["archive_days"] == -1:
+    elif archive_days == -1:
         for file in files:
             file_path = Path(file)
             if file_path.is_file():

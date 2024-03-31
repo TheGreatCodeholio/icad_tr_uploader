@@ -3,20 +3,55 @@
   "systems": {
     "example-system": {
       "archive_days": 0,
-      "archive_path": "/home/example/rtl_archive",
-      "archive_extensions": [".mp3", ".m4a", ".json", ".wav", ".log"],
-      "mp3_bitrate": "32",
-      "m4a_bitrate": "32",
+      "archive_path": "/home/example/tr_archive",
+      "archive_extensions": [
+        ".m4a",
+        ".json",
+        ".wav",
+        ".log"
+      ],
+      "remote_storage": {
+        "enabled": 0,
+        "storage_type": "scp",
+        "remote_path": "/var/www/example.com/audio",
+        "google_cloud": {
+          "project_id": "",
+          "bucket_name": "",
+          "credentials_path": ""
+        },
+        "aws_s3": {
+          "access_key_id": "",
+          "secret_access_key": "",
+          "bucket_name": "",
+          "region": ""
+        },
+        "scp": {
+          "host": "",
+          "port": 22,
+          "user": "",
+          "password": "",
+          "private_key_path": "/home/user/.ssh/id_rsa",
+          "base_url": "https://example.com/audio"
+        }
+      },
       "transcribe": {
         "enabled": 0,
-        "talkgroups": [1, 2, 4],
+        "talkgroups": [
+          1,
+          2,
+          4
+        ],
         "api_url": "",
         "api_key": ""
       },
       "icad_player": {
         "enabled": 0,
         "audio_base_url": "",
-        "talkgroups": [1, 2, 8],
+        "talkgroups": [
+          1,
+          2,
+          8
+        ],
         "api_url": "",
         "api_key": ""
       },
@@ -41,9 +76,32 @@
       },
       "icad_tone_detect": {
         "enabled": 0,
-        "talkgroups": [1, 2, 4],
+        "talkgroups": [
+          1,
+          2,
+          4
+        ],
         "icad_url": "https://detect.example.com/tone_detect",
         "icad_api_key": ""
+      },
+      "talkgroup_config": {
+        "1": {
+          "language": "en",
+          "beam_size": 5,
+          "best_of": 5,
+          "initial_prompt": null,
+          "use_last_as_initial_prompt": false,
+          "word_timestamps": false,
+          "vad_filter": true,
+          "vad_parameters": {
+            "threshold": 0.5,
+            "min_speech_duration_ms": 250,
+            "max_speech_duration_s": 3600,
+            "min_silence_duration_ms": 2000,
+            "window_size_samples": 1024,
+            "speech_pad_ms": 400
+          }
+        }
       }
     }
   }
