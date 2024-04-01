@@ -103,11 +103,15 @@ def main():
     storage_config = system_config.get("remote_storage", {})
 
     if storage_config.get("enabled", 0) == 1:
+        logger.info(f"Uploading to Remote Server: {storage_config.get('storage_type')}")
         if m4a_exists:
             storage_type = get_storage(storage_config)
             if storage_type:
                 try:
                     upload_response = storage_type.upload_file(m4a_path)
+                    if not upload_response:
+                        logger.error("Remote Storage upload not successful.")
+
                     call_data["audio_url"] = upload_response
                 except Exception as e:
                     traceback.print_exc()
