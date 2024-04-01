@@ -31,7 +31,7 @@ def upload_to_transcribe(transcribe_config, audio_file_path, json_file_path, tal
 
             # Check if the status in the response is not 'ok'
             if not response_json.get('success'):
-                raise ValueError(f"Expected status 'ok' but got {response_json.get('status')}")
+                raise ValueError(f"Expected success key true but got {response_json.get('success')}")
 
             return response_json
     except FileNotFoundError as e:
