@@ -218,7 +218,7 @@ def main():
 
     files = [log_path, json_path, m4a_path, wav_path]
 
-    archive_days = storage_config.get("archive_days", 0)
+    archive_days = system_config.get("archive_days", 0)
     archive_path = system_config.get("archive_path", None)
 
     if archive_days > 0:
