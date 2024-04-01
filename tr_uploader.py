@@ -178,7 +178,7 @@ def main():
             else:
                 upload_to_icad_player(system_config.get("icad_player", {}), call_data)
         else:
-            logger.warning(f"No M4A file can't send to iCAD Tone Detect API")
+            logger.warning(f"No M4A file or M4A File not Uploaded to Remote Storage")
 
     # Upload to RDIO
     for rdio in system_config.get("rdio_systems", []):
