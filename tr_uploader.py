@@ -100,7 +100,7 @@ def main():
     # TODO Some Sort of Check For Duplicate Transmissions based on timestamp and length
 
     # upload to remote storage
-    storage_config = system_config.get("file_storage", {})
+    storage_config = system_config.get("remote_storage", {})
 
     if storage_config.get("enabled", 0) == 1:
         if m4a_exists:
