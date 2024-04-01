@@ -2,7 +2,6 @@ import json
 import argparse
 import os
 import traceback
-from datetime import datetime
 from pathlib import Path
 
 from lib.audio_file_handler import archive_files, clean_files
@@ -12,7 +11,7 @@ from lib.icad_tone_detect_handler import upload_to_icad, upload_to_icad_legacy
 from lib.logging_handler import CustomLogger
 from lib.openmhz_handler import upload_to_openmhz
 from lib.rdio_handler import upload_to_rdio
-from lib.remote_storage_handler import get_storage, GoogleCloudStorage, SCPStorage, AWSS3Storage
+from lib.remote_storage_handler import get_storage
 from lib.transcribe_handler import upload_to_transcribe
 
 
@@ -64,7 +63,8 @@ def load_call_data(logger, json_path):
             call_data = json.load(fj)
             call_data["transcript"] = None
             call_data["audio_url"] = None
-            call_data["tone_detection"] = None
+            call_data["tones"] = None
+            call_data["tone_matches"] = None
         logger.info(f'Successfully loaded call json.')
         return call_data
     except FileNotFoundError:
@@ -116,7 +116,7 @@ def main():
             logger.warning(f"No M4A file can't send to Remote Storage")
 
     if system_config.get("transcribe", {}).get("enabled", 0) == 1:
-        if m4a_exists:
+        if wav_exists:
 
             if talkgroup_decimal not in system_config.get("transcribe", {}).get("talkgroups",
                                                                                 []) and "*" not in system_config.get(
@@ -125,30 +125,39 @@ def main():
             else:
                 talkgroup_config = system_config.get("talkgroup_config", {}).get(str(talkgroup_decimal))
 
-                transcribe_json = upload_to_transcribe(system_config.get("transcribe", {}), m4a_path, json_path,
+                transcribe_json = upload_to_transcribe(system_config.get("transcribe", {}), wav_path, json_path,
                                                        talkgroup_config)
                 if transcribe_json:
                     call_data["transcript"] = transcribe_json
 
         else:
-            logger.warning(f"No M4A file can't send to Transcribe API")
+            logger.warning(f"No WAV file can't send to Transcribe API")
 
     # Upload to iCAD Tone Detect
     for icad_detect in system_config.get("icad_tone_detect", []):
         if icad_detect.get("enabled", 0) == 1:
-            if not m4a_exists:
-                logger.warning(f"No M4A file can't send to iCAD Tone Detect")
+            if not wav_exists:
+                logger.warning(f"No WAV file can't send to iCAD Tone Detect")
                 continue
             try:
                 if icad_detect.get("legacy", 0) == 1:
-                    icad_result = upload_to_icad_legacy(icad_detect, m4a_path, call_data)
-                else:
-                    icad_result = upload_to_icad(icad_detect, m4a_path, json_path)
+                    icad_result = upload_to_icad_legacy(icad_detect, wav_path, call_data)
 
-                if icad_result:
-                    logger.info(f"Successfully uploaded to iCAD Detect server: {icad_detect.get('icad_url')}")
+                    if icad_result:
+                        logger.info(f"Successfully uploaded to iCAD Detect server: {icad_detect.get('icad_url')}")
+                    else:
+                        raise Exception()
+
                 else:
-                    raise Exception('Unknown Error')
+                    icad_result = upload_to_icad(icad_detect, wav_path, json_path)
+
+                    if icad_result.get("success"):
+                        call_data["tones"] = icad_result.get
+                        call_data["tone_matches"] = []
+                        logger.info(f"Successfully uploaded to iCAD Detect server: {icad_detect.get('icad_url')}")
+                    else:
+                        raise Exception(icad_result.get('message'))
+
             except Exception as e:
                 logger.error(f"Failed to upload to iCAD Detect server: {icad_detect.get('icad_url')}. Error: {str(e)}",
                              exc_info=True)

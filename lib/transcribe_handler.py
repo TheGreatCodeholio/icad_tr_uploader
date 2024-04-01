@@ -30,7 +30,7 @@ def upload_to_transcribe(transcribe_config, audio_file_path, json_file_path, tal
             module_logger.debug(f'{response_json}')
 
             # Check if the status in the response is not 'ok'
-            if response_json.get('status') != 'ok':
+            if not response_json.get('success'):
                 raise ValueError(f"Expected status 'ok' but got {response_json.get('status')}")
 
             return response_json
