@@ -110,7 +110,9 @@ def main():
                 try:
                     upload_response = storage_type.upload_file(m4a_path)
                     if not upload_response:
-                        logger.error("Remote Storage upload not successful.")
+                        logger.error("Error uploading to Remote Storage.")
+                    else:
+                        logger.info("Remote Storage Upload Successful")
 
                     call_data["audio_url"] = upload_response
                 except Exception as e:
