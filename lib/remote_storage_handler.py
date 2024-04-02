@@ -303,6 +303,8 @@ class SCPStorage:
                 with self._create_sftp_session() as (ssh_client, sftp):
                     self.ensure_remote_directory_exists(sftp, remote_directory)
                     full_remote_path = f"{remote_directory}/{os.path.basename(local_audio_path)}"
+                    module_logger.debug(full_remote_path)
+
                     sftp.put(local_audio_path, full_remote_path)
 
                     # Encode the basename of the local_audio_path to ensure it's URL-safe
