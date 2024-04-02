@@ -270,7 +270,7 @@ class SCPStorage:
     def ensure_remote_directory_exists(self, sftp, remote_directory):
         """Ensure the remote directory structure exists."""
         parts = remote_directory.split("/")
-        current_path = ""
+        current_path = "/"
         index = 0
         for part in parts[1:]:
             if index > 0:
@@ -302,7 +302,8 @@ class SCPStorage:
             try:
                 with self._create_sftp_session() as (ssh_client, sftp):
                     self.ensure_remote_directory_exists(sftp, remote_directory)
-                    sftp.put(local_audio_path, remote_directory)
+                    full_remote_path = f"{remote_directory}/{os.path.basename(local_audio_path)}"
+                    sftp.put(local_audio_path, full_remote_path)
 
                     # Encode the basename of the local_audio_path to ensure it's URL-safe
                     encoded_file_name = quote(os.path.basename(local_audio_path))
