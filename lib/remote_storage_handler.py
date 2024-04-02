@@ -355,10 +355,21 @@ class SCPStorage:
         sftp = None
 
         try:
-            # Use the private key for authentication
-            private_key = RSAKey.from_private_key_file(self.private_key_path)
-            ssh_client.connect(self.host, port=self.port, username=self.username, pkey=private_key,
-                               look_for_keys=False, allow_agent=False)
+
+            # Use the private key for authentication if specified
+            if self.private_key_path:  # Assuming self.private_key_path might be None or empty if not used
+                private_key = RSAKey.from_private_key_file(self.private_key_path)
+                ssh_connect_kwargs = {"pkey": private_key}
+            else:
+                ssh_connect_kwargs = {}
+
+            # Add password to the connection arguments if it is not blank
+            if self.password:  # Assuming self.password is defined and might be empty if not used
+                ssh_connect_kwargs["password"] = self.password
+
+            # Connect using either private key, password, or both
+            ssh_client.connect(self.host, port=self.port, username=self.username,
+                               look_for_keys=False, allow_agent=False, **ssh_connect_kwargs)
 
             sftp = ssh_client.open_sftp()
             yield ssh_client, sftp
