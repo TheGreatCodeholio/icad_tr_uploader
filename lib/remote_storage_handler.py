@@ -248,13 +248,13 @@ class AWSS3Storage:
                         last_modified = obj['LastModified']
                         if last_modified < datetime.datetime.utcnow().replace(tzinfo=None) - datetime.timedelta(
                                 days=archive_days):
-                            print(f"Deleting {obj['Key']}")
                             s3_client.delete_object(Bucket=bucket_name, Key=obj['Key'])
 
             # Additional logic for removing empty 'directories' could be implemented here
             # Note: S3 does not actually have directories, but you can check for and delete empty prefixes
         except ClientError as e:
             module_logger.error(f"Error cleaning S3 files: {e}")
+
 
 class SCPStorage:
     def __init__(self, config_data):
@@ -277,12 +277,9 @@ class SCPStorage:
             current_path = f'{current_path}/{part}'.replace("\\", "/")
 
             try:
-                module_logger.debug(f"SCP Make Folder: {current_path}")
                 sftp.stat(current_path)
             except FileNotFoundError:
-                module_logger.debug(f"SCP file not found error: {current_path}")
                 sftp.mkdir(current_path)
-
             except Exception as e:
                 traceback.print_exc()
                 module_logger.error(f"SCP Unhandled Exception: {e}")
@@ -301,7 +298,6 @@ class SCPStorage:
                 with self._create_sftp_session() as (ssh_client, sftp):
                     self.ensure_remote_directory_exists(sftp, remote_directory)
                     full_remote_path = f"{remote_directory}/{os.path.basename(local_audio_path)}"
-                    module_logger.debug(full_remote_path)
 
                     sftp.put(local_audio_path, full_remote_path)
 
