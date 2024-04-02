@@ -168,8 +168,8 @@ def main():
                     icad_result = upload_to_icad(icad_detect, wav_path, json_path)
 
                     if icad_result.get("success"):
-                        call_data["tones"] = icad_result.get
-                        call_data["tone_matches"] = []
+                        call_data["tones"] = icad_result.get('tones')
+                        call_data["tone_matches"] = icad_result.get('matches')
                         logger.info(f"Successfully uploaded to iCAD Detect server: {icad_detect.get('icad_url')}")
                     else:
                         raise Exception(icad_result.get('message'))

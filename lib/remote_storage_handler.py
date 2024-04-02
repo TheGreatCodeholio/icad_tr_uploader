@@ -4,7 +4,7 @@ import os
 import time
 import traceback
 from stat import S_ISDIR
-
+from contextlib import contextmanager
 from google.cloud import storage
 from google.cloud.exceptions import GoogleCloudError
 
@@ -245,7 +245,8 @@ class AWSS3Storage:
                 if "Contents" in page:
                     for obj in page['Contents']:
                         last_modified = obj['LastModified']
-                        if last_modified < datetime.datetime.utcnow().replace(tzinfo=None) - datetime.timedelta(days=archive_days):
+                        if last_modified < datetime.datetime.utcnow().replace(tzinfo=None) - datetime.timedelta(
+                                days=archive_days):
                             print(f"Deleting {obj['Key']}")
                             s3_client.delete_object(Bucket=bucket_name, Key=obj['Key'])
 
@@ -253,6 +254,19 @@ class AWSS3Storage:
             # Note: S3 does not actually have directories, but you can check for and delete empty prefixes
         except ClientError as e:
             module_logger.error(f"Error cleaning S3 files: {e}")
+
+
+class SFTPContextManager:
+    def __init__(self, ssh_client, sftp):
+        self.ssh_client = ssh_client
+        self.sftp = sftp
+
+    def __enter__(self):
+        return self.ssh_client, self.sftp
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.sftp.close()
+        self.ssh_client.close()
 
 
 class SCPStorage:
@@ -292,7 +306,7 @@ class SCPStorage:
                     self.ensure_remote_directory_exists(sftp, remote_directory)
                     remote_file_path = f"{remote_directory}/{os.path.basename(local_audio_path)}"
                     sftp.put(local_audio_path, remote_file_path)
-                    return {"file_url": f"{self.base_url}/{remote_file_path.strip('/')}"}
+                    return f"{self.base_url}/{remote_file_path.strip('/')}"
             except Exception as error:  # Preferably catch more specific exceptions
                 traceback.print_exc()
                 module_logger.warning(f'Attempt {attempt} failed: {error}')
@@ -332,30 +346,35 @@ class SCPStorage:
             module_logger.error(f"Error during remote cleanup: {e}")
             raise  # Consider re-raising the exception if the caller can handle it
 
+    @contextmanager
     def _create_sftp_session(self):
-        """Creates an SFTP session.
+        """Creates and manages an SFTP session using context management.
 
-        :return: A tuple of SSH client and SFTP session.
+        :return: Yields a tuple of SSH client and SFTP session.
         :raises: FileNotFoundError if private key file doesn't exist.
                   SSHException for other SSH connection errors.
         """
         ssh_client = SSHClient()
         ssh_client.load_system_host_keys()
-
-        # Automatically add host key
         ssh_client.set_missing_host_key_policy(AutoAddPolicy())
+        sftp = None
 
         try:
-            # Use the private key for authentication instead of a password
+            # Use the private key for authentication
             private_key = RSAKey.from_private_key_file(self.private_key_path)
             ssh_client.connect(self.host, port=self.port, username=self.username, pkey=private_key,
                                look_for_keys=False, allow_agent=False)
+
+            sftp = ssh_client.open_sftp()
+            yield ssh_client, sftp  # This is where the caller's with-block code executes
         except FileNotFoundError as e:
             module_logger.error(f'Private key file not found: {e}')
-            raise FileNotFoundError(f'Private key file not found: {e}')
+            raise
         except SSHException as e:
             module_logger.error(f'SSH connection error: {e}')
-            raise SSHException(f'SSH connection error: {e}')
-
-        sftp = ssh_client.open_sftp()
-        return ssh_client, sftp
+            raise
+        finally:
+            # Ensure resources are released even if an exception occurs
+            if sftp:
+                sftp.close()
+            ssh_client.close()
