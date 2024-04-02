@@ -268,16 +268,17 @@ class SCPStorage:
         self.remote_path = config_data['remote_path']
 
     def ensure_remote_directory_exists(self, sftp, remote_directory):
-        """Ensure the remote directory exists, creating it if necessary."""
-        nested_dirs = remote_directory.split('/')
-        current_dir = ''
-        for dir in nested_dirs:
-            current_dir = os.path.join(current_dir, dir) if current_dir else dir
+        """Recursively ensure that a remote directory exists, creating it if necessary."""
+        parts = remote_directory.strip("/").split("/")
+        current_path = ""
+
+        for part in parts:
+            current_path = f"{current_path}/{part}" if current_path else f"/{part}"
             try:
-                sftp.chdir(current_dir)
+                sftp.chdir(current_path)
             except FileNotFoundError:
-                sftp.mkdir(current_dir)
-                sftp.chdir(current_dir)
+                sftp.mkdir(current_path)
+                sftp.chdir(current_path)
 
     def upload_file(self, local_audio_path, max_attempts=3):
         """Uploads a file to the SCP storage with a date-based directory structure.
@@ -289,7 +290,7 @@ class SCPStorage:
         attempt = 0
         current_date = datetime.datetime.utcnow()
         date_path = os.path.join(str(current_date.year), str(current_date.month), str(current_date.day))
-        remote_directory = os.path.join(self.remote_path, date_path)
+        remote_directory = os.path.join(self.remote_path.lstrip('/'), date_path)
 
         while attempt < max_attempts:
             try:
@@ -304,13 +305,12 @@ class SCPStorage:
                 self.ensure_remote_directory_exists(sftp, remote_directory)
 
                 # Upload the file
-                remote_file_path = os.path.join(remote_directory, os.path.basename(local_audio_path))
+                remote_file_path = f"{remote_directory}/{os.path.basename(local_audio_path)}"
                 sftp.put(local_audio_path, remote_file_path)
                 sftp.close()
                 ssh_client.close()
 
-                file_url = f"{self.base_url}/{date_path}/{os.path.basename(local_audio_path)}"
-                return file_url
+                return f"{self.base_url}/{remote_file_path}"
             except SFTPError as error:
                 traceback.print_exc()
                 module_logger.warning(f'Attempt {attempt + 1} failed during uploading a file: {error}')
