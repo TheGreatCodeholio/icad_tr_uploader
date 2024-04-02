@@ -279,6 +279,7 @@ class SCPStorage:
                 current_path = part.replace("\\", "/")
             index += 1
             try:
+                module_logger.debug(f"SCP Make Folder: {current_path}")
                 sftp.stat(current_path)
             except FileNotFoundError:
                 module_logger.debug(f"SCP file not found error: {current_path}")
