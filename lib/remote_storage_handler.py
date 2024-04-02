@@ -271,13 +271,11 @@ class SCPStorage:
         """Ensure the remote directory structure exists."""
         parts = remote_directory.split("/")
         current_path = "/"
-        index = 0
+
         for part in parts[1:]:
-            if index > 0:
-                current_path = f'{current_path}/{part}'.replace("\\", "/")
-            else:
-                current_path = part.replace("\\", "/")
-            index += 1
+
+            current_path = f'{current_path}/{part}'.replace("\\", "/")
+
             try:
                 module_logger.debug(f"SCP Make Folder: {current_path}")
                 sftp.stat(current_path)
