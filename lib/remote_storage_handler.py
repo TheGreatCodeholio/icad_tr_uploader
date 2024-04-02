@@ -285,13 +285,13 @@ class SCPStorage:
             raise FileNotFoundError(f'Local file {local_audio_path} does not exist.')
 
         current_date = datetime.datetime.utcnow().strftime('%Y/%m/%d')
-        remote_directory = os.path.join(self.remote_path, current_date)
+        remote_directory = f"{self.remote_path}/{current_date}".replace("\\", "/")
 
         for attempt in range(1, max_attempts + 1):
             try:
                 with self._create_sftp_session() as (ssh_client, sftp):
                     self.ensure_remote_directory_exists(sftp, remote_directory)
-                    remote_file_path = os.path.join(remote_directory, os.path.basename(local_audio_path))
+                    remote_file_path = f"{remote_directory}/{os.path.basename(local_audio_path)}".replace("\\", "/")
                     module_logger.debug(remote_file_path)
                     sftp.put(local_audio_path, remote_file_path)
 
