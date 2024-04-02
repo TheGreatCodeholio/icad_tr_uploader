@@ -1,7 +1,9 @@
+import datetime
 import logging
 import os
 import time
 import traceback
+from stat import S_ISDIR
 
 from google.cloud import storage
 from google.cloud.exceptions import GoogleCloudError
@@ -74,12 +76,12 @@ class GoogleCloudStorage:
 
     def upload_file(self, local_audio_path, make_public=True):
         """
-        Uploads a file to Google Cloud Storage and optionally makes it public.
+        Uploads a file to Google Cloud Storage into a date-based directory structure and optionally makes it public.
 
         Parameters:
         -----------
-        file : bytes or file-like object
-            The file contents or a file-like object to upload.
+        local_audio_path : str
+            The local file path of the audio file to upload.
         make_public : bool, optional
             If True, makes the uploaded file publicly accessible (default is True).
 
@@ -90,11 +92,15 @@ class GoogleCloudStorage:
             Returns None if the upload fails.
         """
         try:
+            current_date = datetime.datetime.utcnow()
+            date_path = f"{current_date.year}/{current_date.month}/{current_date.day}"
+            remote_path = f"{date_path}/{os.path.basename(local_audio_path)}"  # Updated remote path with date
+
             if self.bucket:
-                blob = self.bucket.blob(self.remote_path)
+                blob = self.bucket.blob(remote_path)
 
                 with open(local_audio_path, 'rb') as af:
-                    blob.upload_from_file(af.read(), content_type='audio/aac')
+                    blob.upload_from_file(af, content_type='audio/aac')  # Use af directly instead of af.read()
 
                 if make_public:
                     blob.make_public()
@@ -106,6 +112,33 @@ class GoogleCloudStorage:
         except GoogleCloudError as e:
             module_logger.error(f"Failed to upload file to Google Cloud Storage: {e}")
             return None
+
+    def clean_remote_files(self, archive_days):
+        """
+        Deletes files from Google Cloud Storage that are older than a specified number of days.
+        Identifies empty directories for potential cleanup.
+
+        Parameters:
+        -----------
+        archive_days : int
+            The number of days after which files should be deleted.
+        """
+        try:
+            blobs = self.bucket.list_blobs()
+            now = datetime.datetime.utcnow()
+            for blob in blobs:
+                if (now - blob.time_created).days > archive_days:
+                    print(f"Deleting: {blob.name}")
+                    blob.delete()
+
+            # Google Cloud Storage does not support empty directories in the same way
+            # traditional file systems do, since it is object-based.
+            # Thus, "cleaning" directories would typically involve removing 'directory' objects
+            # or objects with paths that no longer contain files. This can be complex and
+            # often unnecessary unless you have specific organizational needs for it.
+
+        except GoogleCloudError as e:
+            module_logger.error(f"Failed to clean Google Cloud Storage: {e}")
 
 
 class AWSS3Storage:
@@ -158,7 +191,7 @@ class AWSS3Storage:
 
     def upload_file(self, local_audio_path, make_public=True):
         """
-        Uploads a file to Amazon S3 and optionally makes it public.
+        Uploads a file to Amazon S3 into a date-based directory structure and optionally makes it public.
 
         Parameters:
         -----------
@@ -173,20 +206,54 @@ class AWSS3Storage:
             The public URL of the uploaded file if make_public is True, otherwise None.
             Returns None if the upload fails.
         """
+        current_date = datetime.datetime.utcnow()
+        date_path = f"{current_date.year}/{current_date.month}/{current_date.day}"
+        remote_path = f"{date_path}/{os.path.basename(local_audio_path)}"  # Include the date in the remote path
+
         try:
             with open(local_audio_path, 'rb') as file:
-                self.bucket.put_object(Key=self.remote_path, Body=file)
+                self.bucket.put_object(Key=remote_path, Body=file)  # Use the updated remote path
 
             if make_public:
-                self.s3.ObjectAcl(self.bucket_name, self.remote_path).put(ACL='public-read')
+                self.s3.ObjectAcl(self.bucket_name, remote_path).put(ACL='public-read')
 
-            return f"https://{self.bucket_name}.s3.amazonaws.com/{self.remote_path}" if make_public else None
+            return f"https://{self.bucket_name}.s3.amazonaws.com/{remote_path}" if make_public else None
         except FileNotFoundError:
             module_logger.error(f"Local file {local_audio_path} not found.")
             return None
         except (ClientError, ParamValidationError) as e:
             module_logger.error(f"Error uploading file to AWS S3: {e}")
             return None
+
+    def clean_remote_files(self, archive_days):
+        """
+        Deletes files from an S3 bucket that are older than a specified number of days.
+
+        Parameters:
+        -----------
+        archive_days : int
+            The number of days after which files should be deleted.
+        """
+        s3_client = boto3.client('s3')
+        bucket_name = self.bucket_name  # Your S3 bucket name
+
+        try:
+            # List all objects within the bucket
+            paginator = s3_client.get_paginator('list_objects_v2')
+            page_iterator = paginator.paginate(Bucket=bucket_name)
+
+            for page in page_iterator:
+                if "Contents" in page:
+                    for obj in page['Contents']:
+                        last_modified = obj['LastModified']
+                        if last_modified < datetime.datetime.utcnow().replace(tzinfo=None) - datetime.timedelta(days=archive_days):
+                            print(f"Deleting {obj['Key']}")
+                            s3_client.delete_object(Bucket=bucket_name, Key=obj['Key'])
+
+            # Additional logic for removing empty 'directories' could be implemented here
+            # Note: S3 does not actually have directories, but you can check for and delete empty prefixes
+        except ClientError as e:
+            module_logger.error(f"Error cleaning S3 files: {e}")
 
 
 class SCPStorage:
@@ -201,34 +268,48 @@ class SCPStorage:
         self.remote_path = config_data['remote_path']
 
     def upload_file(self, local_audio_path, max_attempts=3):
-        """Uploads a file to the SCP storage.
+        """Uploads a file to the SCP storage with a date-based directory structure.
 
         :param max_attempts: Maximum times we will try file upload if there is an SCP exception
         :param local_audio_path: The local path to the audio file to upload.
         :return: Dictionary containing the file URL or False if upload fails.
         """
         attempt = 0
+        current_date = datetime.datetime.utcnow()
+        date_path = os.path.join(str(current_date.year), str(current_date.month), str(current_date.day))
+        remote_directory = os.path.join(self.remote_path, date_path)
+
         while attempt < max_attempts:
             try:
-                full_remote_path = os.path.join(self.remote_path, os.path.basename(local_audio_path))
                 ssh_client, sftp = self._create_sftp_session()
 
+                # Check if local file exists
                 if not os.path.exists(local_audio_path):
                     module_logger.error(f'Local File {local_audio_path} doesn\'t exist')
                     return False
 
+                # Ensure the remote directory exists or create it
                 try:
-                    sftp.stat(self.remote_path)
-                except FileNotFoundError:
-                    module_logger.error(f'Remote Path {self.remote_path} doesn\'t exist')
-                    return False
+                    sftp.chdir(remote_directory)  # Test if remote_path exists
+                except IOError:
+                    # Create remote directory because it does not exist
+                    nested_dirs = remote_directory.split('/')
+                    current_dir = ''
+                    for dr in nested_dirs:
+                        current_dir = os.path.join(current_dir, dr)
+                        try:
+                            sftp.chdir(current_dir)  # Test if this path exists
+                        except IOError:
+                            sftp.mkdir(current_dir)  # Create if it does not exist
+                            sftp.chdir(current_dir)
 
-                sftp.put(local_audio_path, full_remote_path)
+                # Upload the file
+                remote_file_path = os.path.join(remote_directory, os.path.basename(local_audio_path))
+                sftp.put(local_audio_path, remote_file_path)
                 sftp.close()
                 ssh_client.close()
 
-                file_url = f"{self.base_url}/{os.path.basename(local_audio_path)}"
-
+                file_url = f"{self.base_url}/{date_path}/{os.path.basename(local_audio_path)}"
                 return file_url
             except SFTPError as error:
                 traceback.print_exc()
@@ -243,6 +324,49 @@ class SCPStorage:
 
         module_logger.error(f'All {max_attempts} attempts failed.')
         return False
+
+    def clean_remote_files(self, archive_days):
+        """Removes files older than a specified number of days within the remote archive path.
+
+        :param archive_days: The age in days beyond which files should be removed.
+        """
+        try:
+            ssh_client, sftp = self._create_sftp_session()
+            current_time = time.time()
+            count = 0
+
+            # Recursive function to traverse and clean directories
+            def clean_directory(path):
+                nonlocal count
+                try:
+                    for entry in sftp.listdir_attr(path):
+                        remote_path = os.path.join(path, entry.filename)
+                        if S_ISDIR(entry.st_mode):  # If entry is a directory, recurse into it
+                            clean_directory(remote_path)
+                            # Try to remove the directory if it's empty
+                            try:
+                                sftp.rmdir(remote_path)
+                            except IOError:
+                                pass  # Directory not empty
+                        else:
+                            file_time = entry.st_mtime
+                            days_difference = (current_time - file_time) / (24 * 3600)
+                            if days_difference >= archive_days:
+                                sftp.remove(remote_path)
+                                count += 1
+                                module_logger.debug(f"Successfully cleaned remote file: {remote_path}")
+                except Exception as e:
+                    module_logger.error(f"Failed to clean directory: {path}, Error: {e}")
+
+            clean_directory(self.remote_path)
+            module_logger.info(f"Cleaned {count} files remotely.")
+        except Exception as e:
+            module_logger.error(f"Error during remote cleanup: {e}")
+        finally:
+            if sftp:
+                sftp.close()
+            if ssh_client:
+                ssh_client.close()
 
     def _create_sftp_session(self):
         """Creates an SFTP session.

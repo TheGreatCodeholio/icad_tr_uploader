@@ -40,8 +40,13 @@ def load_config(config_path, app_name, system_name, log_path):
     try:
         with open(config_path, 'r') as f:
             config_data = json.load(f)
-        logger = CustomLogger(config_data["log_level"], app_name, log_path).logger
-        system_config = config_data["systems"][system_name]
+        logger = CustomLogger(config_data.get("log_level", 1), app_name, log_path).logger
+        system_config = config_data.get("systems", {}).get(system_name, {})
+
+        if len(system_config) < 1:
+            logger.error("System not found in config.")
+            exit(1)
+
         logger.info(f'Successfully loaded configuration.')
         return config_data, logger, system_config
     except FileNotFoundError:
@@ -115,6 +120,10 @@ def main():
                         logger.info("Remote Storage Upload Successful")
 
                     call_data["audio_url"] = upload_response
+
+                    if storage_type.get('archive_days', 0) > 0:
+                        storage_type.clean_remote_files(storage_config.get('archive_days'))
+
                 except Exception as e:
                     traceback.print_exc()
                     logger.error(f'File <<Upload>> <<failed>> File Save Error: {e}')
@@ -184,7 +193,7 @@ def main():
             else:
                 upload_to_icad_player(system_config.get("icad_player", {}), call_data)
         else:
-            logger.warning(f"No M4A file or M4A File not Uploaded to Remote Storage")
+            logger.warning(f"Not uploading to iCAD Player: No M4A file or M4A File not Uploaded to Remote Storage")
 
     # Upload to RDIO
     for rdio in system_config.get("rdio_systems", []):

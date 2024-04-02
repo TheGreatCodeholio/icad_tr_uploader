@@ -13,6 +13,7 @@
       "remote_storage": {
         "enabled": 0,
         "storage_type": "scp",
+        "archive_days": 0,
         "remote_path": "/var/www/example.com/audio",
         "google_cloud": {
           "project_id": "",
