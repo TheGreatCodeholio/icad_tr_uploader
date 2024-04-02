@@ -373,9 +373,6 @@ class SCPStorage:
 
             sftp = ssh_client.open_sftp()
             yield ssh_client, sftp
-        except FileNotFoundError as e:
-            module_logger.error(f'Private key file not found: {e}')
-            raise
         except SSHException as e:
             module_logger.error(f'SSH connection error: {e}')
             raise
