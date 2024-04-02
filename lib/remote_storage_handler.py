@@ -267,6 +267,18 @@ class SCPStorage:
         self.base_url = scp_config['base_url']
         self.remote_path = config_data['remote_path']
 
+    def ensure_remote_directory_exists(self, sftp, remote_directory):
+        """Ensure the remote directory exists, creating it if necessary."""
+        nested_dirs = remote_directory.split('/')
+        current_dir = ''
+        for dir in nested_dirs:
+            current_dir = os.path.join(current_dir, dir) if current_dir else dir
+            try:
+                sftp.chdir(current_dir)
+            except FileNotFoundError:
+                sftp.mkdir(current_dir)
+                sftp.chdir(current_dir)
+
     def upload_file(self, local_audio_path, max_attempts=3):
         """Uploads a file to the SCP storage with a date-based directory structure.
 
@@ -289,15 +301,7 @@ class SCPStorage:
                     return False
 
                 # Ensure the remote directory exists or create it
-                nested_dirs = remote_directory.split('/')
-                current_dir = ''
-                for dir in nested_dirs:
-                    current_dir = os.path.join(current_dir, dir) if current_dir else dir
-                    try:
-                        sftp.chdir(current_dir)  # Try to change to the directory
-                    except FileNotFoundError:  # Corrected to catch FileNotFoundError
-                        sftp.mkdir(current_dir)  # Create if it does not exist
-                        sftp.chdir(current_dir)
+                self.ensure_remote_directory_exists(sftp, remote_directory)
 
                 # Upload the file
                 remote_file_path = os.path.join(remote_directory, os.path.basename(local_audio_path))
