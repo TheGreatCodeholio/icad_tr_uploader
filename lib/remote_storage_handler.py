@@ -267,19 +267,6 @@ class SCPStorage:
         self.base_url = scp_config['base_url']
         self.remote_path = config_data['remote_path']
 
-    def ensure_remote_directory_exists(self, sftp, remote_directory):
-        """Recursively ensure that a remote directory exists, creating it if necessary."""
-        parts = remote_directory.strip("/").split("/")
-        current_path = ""
-
-        for part in parts:
-            current_path = f"{current_path}/{part}" if current_path else f"/{part}"
-            try:
-                sftp.chdir(current_path)
-            except FileNotFoundError:
-                sftp.mkdir(current_path)
-                sftp.chdir(current_path)
-
     def upload_file(self, local_audio_path, max_attempts=3):
         """Uploads a file to the SCP storage with a date-based directory structure.
 
@@ -302,7 +289,16 @@ class SCPStorage:
                     return False
 
                 # Ensure the remote directory exists or create it
-                self.ensure_remote_directory_exists(sftp, remote_directory)
+                parts = remote_directory.strip("/").split("/")
+                current_path = ""
+
+                for part in parts:
+                    current_path = f"{current_path}/{part}" if current_path else f"/{part}"
+                    try:
+                        sftp.chdir(current_path)
+                    except FileNotFoundError:
+                        sftp.mkdir(current_path)
+                        sftp.chdir(current_path)
 
                 # Upload the file
                 remote_file_path = f"{remote_directory}/{os.path.basename(local_audio_path)}"
@@ -317,10 +313,6 @@ class SCPStorage:
                 attempt += 1
                 if attempt < max_attempts:
                     time.sleep(5)
-            except Exception as error:
-                traceback.print_exc()
-                module_logger.error(f'Error occurred during uploading a file: {error}')
-                return False
 
         module_logger.error(f'All {max_attempts} attempts failed.')
         return False
