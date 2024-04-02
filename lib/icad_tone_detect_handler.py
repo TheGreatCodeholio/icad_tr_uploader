@@ -14,9 +14,6 @@ def upload_to_icad_legacy(icad_data, mp3_path, call_data):
         module_logger.error('Failed uploading to iCAD API: Empty call_data JSON')
         return False
 
-    # This should likely be setting a correct API key field from icad_data if it exists.
-    call_data["api_key"] = icad_data.get('api_key')
-
     try:
         with open(mp3_path, 'rb') as audio_file:
             files = {'file': (mp3_path, audio_file, 'audio/mpeg')}

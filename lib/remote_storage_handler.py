@@ -7,6 +7,7 @@ from stat import S_ISDIR
 from contextlib import contextmanager
 from google.cloud import storage
 from google.cloud.exceptions import GoogleCloudError
+from urllib.parse import urljoin, quote
 
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError, ParamValidationError
@@ -255,20 +256,6 @@ class AWSS3Storage:
         except ClientError as e:
             module_logger.error(f"Error cleaning S3 files: {e}")
 
-
-class SFTPContextManager:
-    def __init__(self, ssh_client, sftp):
-        self.ssh_client = ssh_client
-        self.sftp = sftp
-
-    def __enter__(self):
-        return self.ssh_client, self.sftp
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.sftp.close()
-        self.ssh_client.close()
-
-
 class SCPStorage:
     def __init__(self, config_data):
         scp_config = config_data['scp']
@@ -298,15 +285,23 @@ class SCPStorage:
             raise FileNotFoundError(f'Local file {local_audio_path} does not exist.')
 
         current_date = datetime.datetime.utcnow().strftime('%Y/%m/%d')
-        remote_directory = f"{self.remote_path.lstrip('/')}/{current_date}"
+        remote_directory = os.path.join(self.remote_path, current_date)
 
         for attempt in range(1, max_attempts + 1):
             try:
-                with self._create_sftp_session() as (ssh_client, sftp):
+                with self._create_sftp_session as (ssh_client, sftp):
                     self.ensure_remote_directory_exists(sftp, remote_directory)
-                    remote_file_path = f"{remote_directory}/{os.path.basename(local_audio_path)}"
+                    remote_file_path = os.path.join(remote_directory, os.path.basename(local_audio_path))
                     sftp.put(local_audio_path, remote_file_path)
-                    return f"{self.base_url}/{remote_file_path.strip('/')}"
+
+                    # Encode the basename of the local_audio_path to ensure it's URL-safe
+                    encoded_file_name = quote(os.path.basename(local_audio_path))
+
+                    # First, join the base URL with the current_date
+                    url_with_date = urljoin(self.base_url + '/', current_date + '/')
+
+                    # Then, join the result with the encoded file name
+                    return urljoin(url_with_date, encoded_file_name)
             except Exception as error:  # Preferably catch more specific exceptions
                 traceback.print_exc()
                 module_logger.warning(f'Attempt {attempt} failed: {error}')
@@ -338,7 +333,7 @@ class SCPStorage:
                         module_logger.debug(f"Successfully cleaned remote file: {remote_path}")
 
         try:
-            with self._create_sftp_session() as (ssh_client, sftp):
+            with self._create_sftp_session as (ssh_client, sftp):
                 count = 0
                 clean_directory(sftp, self.remote_path, archive_days * 24 * 3600)
                 module_logger.info(f"Cleaned {count} files remotely.")
