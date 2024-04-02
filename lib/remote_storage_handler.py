@@ -269,7 +269,7 @@ class SCPStorage:
 
     def ensure_remote_directory_exists(self, sftp, remote_directory):
         """Ensure the remote directory structure exists."""
-        parts = remote_directory.strip("/").split("/")
+        parts = remote_directory.split("/")
         current_path = ""
         for part in parts:
             current_path = os.path.join(current_path, part)
