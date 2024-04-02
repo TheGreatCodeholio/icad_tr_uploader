@@ -271,7 +271,7 @@ class SCPStorage:
         """Ensure the remote directory structure exists."""
         parts = remote_directory.split("/")
         current_path = ""
-        for part in parts:
+        for part in parts[1:]:
             current_path = os.path.join(current_path, part)
             try:
                 sftp.stat(current_path)
