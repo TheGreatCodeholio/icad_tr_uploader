@@ -289,19 +289,15 @@ class SCPStorage:
                     return False
 
                 # Ensure the remote directory exists or create it
-                try:
-                    sftp.chdir(remote_directory)  # Test if remote_path exists
-                except IOError:
-                    # Create remote directory because it does not exist
-                    nested_dirs = remote_directory.split('/')
-                    current_dir = ''
-                    for dr in nested_dirs:
-                        current_dir = os.path.join(current_dir, dr)
-                        try:
-                            sftp.chdir(current_dir)  # Test if this path exists
-                        except IOError:
-                            sftp.mkdir(current_dir)  # Create if it does not exist
-                            sftp.chdir(current_dir)
+                nested_dirs = remote_directory.split('/')
+                current_dir = ''
+                for dir in nested_dirs:
+                    current_dir = os.path.join(current_dir, dir) if current_dir else dir
+                    try:
+                        sftp.chdir(current_dir)  # Try to change to the directory
+                    except FileNotFoundError:  # Corrected to catch FileNotFoundError
+                        sftp.mkdir(current_dir)  # Create if it does not exist
+                        sftp.chdir(current_dir)
 
                 # Upload the file
                 remote_file_path = os.path.join(remote_directory, os.path.basename(local_audio_path))

@@ -121,7 +121,7 @@ def main():
 
                     call_data["audio_url"] = upload_response
 
-                    if storage_type.get('archive_days', 0) > 0:
+                    if storage_config.get('archive_days', 0) > 0:
                         storage_type.clean_remote_files(storage_config.get('archive_days'))
 
                 except Exception as e:
