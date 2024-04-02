@@ -291,23 +291,21 @@ class SCPStorage:
                 # Ensure the remote directory exists or create it
                 parts = remote_directory.strip("/").split("/")
                 current_path = ""
-
                 for part in parts:
-                    current_path = f"{current_path}/{part}" if current_path else f"/{part}"
+                    current_path = os.path.join(current_path, part)
                     try:
-                        sftp.chdir(current_path)
+                        sftp.stat(current_path)
                     except FileNotFoundError:
                         sftp.mkdir(current_path)
-                        sftp.chdir(current_path)
 
                 # Upload the file
-                remote_file_path = f"{remote_directory}/{os.path.basename(local_audio_path)}"
+                remote_file_path = os.path.join(remote_directory, os.path.basename(local_audio_path))
                 sftp.put(local_audio_path, remote_file_path)
                 sftp.close()
                 ssh_client.close()
 
-                return f"{self.base_url}/{remote_file_path}"
-            except SFTPError as error:
+                return {"file_url": f"{self.base_url}/{remote_file_path.strip('/')}"}  # Return the file URL
+            except Exception as error:  # It's better to catch a more specific exception here
                 traceback.print_exc()
                 module_logger.warning(f'Attempt {attempt + 1} failed during uploading a file: {error}')
                 attempt += 1
