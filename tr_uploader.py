@@ -113,16 +113,21 @@ def main():
         if m4a_exists:
             storage_type = get_storage(storage_config)
             if storage_type:
-                upload_response = storage_type.upload_file(m4a_path)
-                if not upload_response:
-                    logger.error("Error uploading to Remote Storage.")
-                else:
-                    logger.info("Remote Storage Upload Successful")
+                try:
+                    upload_response = storage_type.upload_file(m4a_path)
+                    if not upload_response:
+                        logger.error("Error uploading to Remote Storage.")
+                    else:
+                        logger.info("Remote Storage Upload Successful")
 
-                call_data["audio_url"] = upload_response
+                    call_data["audio_url"] = upload_response
 
-                if storage_config.get('archive_days', 0) > 0:
-                    storage_type.clean_remote_files(storage_config.get('archive_days'))
+                    if storage_config.get('archive_days', 0) > 0:
+                        storage_type.clean_remote_files(storage_config.get('archive_days'))
+
+                except Exception as e:
+                    traceback.print_exc()
+                    logger.error(f'Remote Storage upload failed: {e}')
         else:
             logger.warning(f"No M4A file can't send to Remote Storage")
 

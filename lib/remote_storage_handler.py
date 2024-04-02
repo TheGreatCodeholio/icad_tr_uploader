@@ -12,7 +12,6 @@ import boto3
 from botocore.exceptions import ClientError, NoCredentialsError, ParamValidationError
 
 from paramiko import SSHClient, AutoAddPolicy, RSAKey, SSHException
-from paramiko.sftp import SFTPError
 
 module_logger = logging.getLogger('icad_tr_uploader.remote_storage')
 
@@ -92,9 +91,9 @@ class GoogleCloudStorage:
             Returns None if the upload fails.
         """
         try:
-            current_date = datetime.datetime.utcnow()
-            date_path = f"{current_date.year}/{current_date.month}/{current_date.day}"
-            remote_path = f"{date_path}/{os.path.basename(local_audio_path)}"  # Updated remote path with date
+            current_date = datetime.datetime.utcnow().strftime('%Y/%m/%d')
+            remote_directory = f"{self.remote_path.lstrip('/')}/{current_date}"
+            remote_path = f"{remote_directory}/{os.path.basename(local_audio_path)}"  # Updated remote path with date
 
             if self.bucket:
                 blob = self.bucket.blob(remote_path)
@@ -206,9 +205,9 @@ class AWSS3Storage:
             The public URL of the uploaded file if make_public is True, otherwise None.
             Returns None if the upload fails.
         """
-        current_date = datetime.datetime.utcnow()
-        date_path = f"{current_date.year}/{current_date.month}/{current_date.day}"
-        remote_path = f"{date_path}/{os.path.basename(local_audio_path)}"  # Include the date in the remote path
+        current_date = datetime.datetime.utcnow().strftime('%Y/%m/%d')
+        remote_directory = f"{self.remote_path.lstrip('/')}/{current_date}"
+        remote_path = f"{remote_directory}/{os.path.basename(local_audio_path)}"  # Include the date in the remote path
 
         try:
             with open(local_audio_path, 'rb') as file:
@@ -267,48 +266,36 @@ class SCPStorage:
         self.base_url = scp_config['base_url']
         self.remote_path = config_data['remote_path']
 
-    def upload_file(self, local_audio_path, max_attempts=3):
-        """Uploads a file to the SCP storage with a date-based directory structure.
-
-        :param max_attempts: Maximum times we will try file upload if there is an SCP exception
-        :param local_audio_path: The local path to the audio file to upload.
-        :return: Dictionary containing the file URL or False if upload fails.
-        """
-        attempt = 0
-        current_date = datetime.datetime.utcnow()
-        date_path = os.path.join(str(current_date.year), str(current_date.month), str(current_date.day))
-        remote_directory = os.path.join(self.remote_path.lstrip('/'), date_path)
-
-        while attempt < max_attempts:
+    def ensure_remote_directory_exists(self, sftp, remote_directory):
+        """Ensure the remote directory structure exists."""
+        parts = remote_directory.strip("/").split("/")
+        current_path = ""
+        for part in parts:
+            current_path = os.path.join(current_path, part)
             try:
-                ssh_client, sftp = self._create_sftp_session()
+                sftp.stat(current_path)
+            except FileNotFoundError:
+                sftp.mkdir(current_path)
 
-                # Check if local file exists
-                if not os.path.exists(local_audio_path):
-                    module_logger.error(f'Local File {local_audio_path} doesn\'t exist')
-                    return False
+    def upload_file(self, local_audio_path, max_attempts=3):
+        """Uploads a file to the SCP storage with a date-based directory structure."""
+        if not os.path.exists(local_audio_path):
+            module_logger.error(f'Local file {local_audio_path} does not exist.')
+            raise FileNotFoundError(f'Local file {local_audio_path} does not exist.')
 
-                # Ensure the remote directory exists or create it
-                parts = remote_directory.strip("/").split("/")
-                current_path = ""
-                for part in parts:
-                    current_path = os.path.join(current_path, part)
-                    try:
-                        sftp.stat(current_path)
-                    except FileNotFoundError:
-                        sftp.mkdir(current_path)
+        current_date = datetime.datetime.utcnow().strftime('%Y/%m/%d')
+        remote_directory = f"{self.remote_path.lstrip('/')}/{current_date}"
 
-                # Upload the file
-                remote_file_path = os.path.join(remote_directory, os.path.basename(local_audio_path))
-                sftp.put(local_audio_path, remote_file_path)
-                sftp.close()
-                ssh_client.close()
-
-                return {"file_url": f"{self.base_url}/{remote_file_path.strip('/')}"}  # Return the file URL
-            except Exception as error:  # It's better to catch a more specific exception here
+        for attempt in range(1, max_attempts + 1):
+            try:
+                with self._create_sftp_session() as (ssh_client, sftp):
+                    self.ensure_remote_directory_exists(sftp, remote_directory)
+                    remote_file_path = f"{remote_directory}/{os.path.basename(local_audio_path)}"
+                    sftp.put(local_audio_path, remote_file_path)
+                    return {"file_url": f"{self.base_url}/{remote_file_path.strip('/')}"}
+            except Exception as error:  # Preferably catch more specific exceptions
                 traceback.print_exc()
-                module_logger.warning(f'Attempt {attempt + 1} failed during uploading a file: {error}')
-                attempt += 1
+                module_logger.warning(f'Attempt {attempt} failed: {error}')
                 if attempt < max_attempts:
                     time.sleep(5)
 
@@ -316,47 +303,34 @@ class SCPStorage:
         return False
 
     def clean_remote_files(self, archive_days):
-        """Removes files older than a specified number of days within the remote archive path.
+        """Removes files older than a specified number of days within the remote archive path."""
 
-        :param archive_days: The age in days beyond which files should be removed.
-        """
+        def clean_directory(sftp, path, archive_seconds):
+            """Recursive function to traverse and clean directories."""
+            nonlocal count
+            for entry in sftp.listdir_attr(path):
+                remote_path = os.path.join(path, entry.filename)
+                if S_ISDIR(entry.st_mode):  # If entry is a directory, recurse into it
+                    clean_directory(sftp, remote_path, archive_seconds)
+                    # Try to remove the directory if it's empty
+                    try:
+                        sftp.rmdir(remote_path)
+                    except IOError:
+                        pass  # Directory not empty
+                else:
+                    if time.time() - entry.st_mtime >= archive_seconds:
+                        sftp.remove(remote_path)
+                        count += 1
+                        module_logger.debug(f"Successfully cleaned remote file: {remote_path}")
+
         try:
-            ssh_client, sftp = self._create_sftp_session()
-            current_time = time.time()
-            count = 0
-
-            # Recursive function to traverse and clean directories
-            def clean_directory(path):
-                nonlocal count
-                try:
-                    for entry in sftp.listdir_attr(path):
-                        remote_path = os.path.join(path, entry.filename)
-                        if S_ISDIR(entry.st_mode):  # If entry is a directory, recurse into it
-                            clean_directory(remote_path)
-                            # Try to remove the directory if it's empty
-                            try:
-                                sftp.rmdir(remote_path)
-                            except IOError:
-                                pass  # Directory not empty
-                        else:
-                            file_time = entry.st_mtime
-                            days_difference = (current_time - file_time) / (24 * 3600)
-                            if days_difference >= archive_days:
-                                sftp.remove(remote_path)
-                                count += 1
-                                module_logger.debug(f"Successfully cleaned remote file: {remote_path}")
-                except Exception as e:
-                    module_logger.error(f"Failed to clean directory: {path}, Error: {e}")
-
-            clean_directory(self.remote_path)
-            module_logger.info(f"Cleaned {count} files remotely.")
+            with self._create_sftp_session() as (ssh_client, sftp):
+                count = 0
+                clean_directory(sftp, self.remote_path, archive_days * 24 * 3600)
+                module_logger.info(f"Cleaned {count} files remotely.")
         except Exception as e:
             module_logger.error(f"Error during remote cleanup: {e}")
-        finally:
-            if sftp:
-                sftp.close()
-            if ssh_client:
-                ssh_client.close()
+            raise  # Consider re-raising the exception if the caller can handle it
 
     def _create_sftp_session(self):
         """Creates an SFTP session.
