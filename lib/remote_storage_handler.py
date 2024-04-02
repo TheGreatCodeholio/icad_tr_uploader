@@ -276,7 +276,12 @@ class SCPStorage:
             try:
                 sftp.stat(current_path)
             except FileNotFoundError:
+                module_logger.debug(f"SCP file not found error: {current_path}")
                 sftp.mkdir(current_path)
+
+            except Exception as e:
+                traceback.print_exc()
+                module_logger.error(f"SCP Unhandled Exception: {e}")
 
     def upload_file(self, local_audio_path, max_attempts=3):
         """Uploads a file to the SCP storage with a date-based directory structure."""
