@@ -289,7 +289,7 @@ class SCPStorage:
 
         for attempt in range(1, max_attempts + 1):
             try:
-                with self._create_sftp_session as (ssh_client, sftp):
+                with self._create_sftp_session() as (ssh_client, sftp):
                     self.ensure_remote_directory_exists(sftp, remote_directory)
                     remote_file_path = os.path.join(remote_directory, os.path.basename(local_audio_path))
                     sftp.put(local_audio_path, remote_file_path)
@@ -333,7 +333,7 @@ class SCPStorage:
                         module_logger.debug(f"Successfully cleaned remote file: {remote_path}")
 
         try:
-            with self._create_sftp_session as (ssh_client, sftp):
+            with self._create_sftp_session() as (ssh_client, sftp):
                 count = 0
                 clean_directory(sftp, self.remote_path, archive_days * 24 * 3600)
                 module_logger.info(f"Cleaned {count} files remotely.")
@@ -361,7 +361,7 @@ class SCPStorage:
                                look_for_keys=False, allow_agent=False)
 
             sftp = ssh_client.open_sftp()
-            yield ssh_client, sftp  # This is where the caller's with-block code executes
+            yield ssh_client, sftp
         except FileNotFoundError as e:
             module_logger.error(f'Private key file not found: {e}')
             raise
@@ -369,7 +369,6 @@ class SCPStorage:
             module_logger.error(f'SSH connection error: {e}')
             raise
         finally:
-            # Ensure resources are released even if an exception occurs
             if sftp:
                 sftp.close()
             ssh_client.close()
