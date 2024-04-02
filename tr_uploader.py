@@ -57,7 +57,8 @@ def load_config(config_path, app_name, system_name, log_path):
         exit(0)
 
 
-def save_call_json(json_file_path, call_data):
+def save_call_json(logger, json_file_path, call_data):
+    logger.debug(call_data)
     with open(json_file_path, 'w') as f:
         json.dump(call_data, f, indent=4, sort_keys=True)
 
@@ -112,21 +113,16 @@ def main():
         if m4a_exists:
             storage_type = get_storage(storage_config)
             if storage_type:
-                try:
-                    upload_response = storage_type.upload_file(m4a_path)
-                    if not upload_response:
-                        logger.error("Error uploading to Remote Storage.")
-                    else:
-                        logger.info("Remote Storage Upload Successful")
+                upload_response = storage_type.upload_file(m4a_path)
+                if not upload_response:
+                    logger.error("Error uploading to Remote Storage.")
+                else:
+                    logger.info("Remote Storage Upload Successful")
 
-                    call_data["audio_url"] = upload_response
+                call_data["audio_url"] = upload_response
 
-                    if storage_config.get('archive_days', 0) > 0:
-                        storage_type.clean_remote_files(storage_config.get('archive_days'))
-
-                except Exception as e:
-                    traceback.print_exc()
-                    logger.error(f'File <<Upload>> <<failed>> File Save Error: {e}')
+                if storage_config.get('archive_days', 0) > 0:
+                    storage_type.clean_remote_files(storage_config.get('archive_days'))
         else:
             logger.warning(f"No M4A file can't send to Remote Storage")
 
@@ -181,7 +177,7 @@ def main():
             logger.warning(f"iCAD Detect is disabled: {icad_detect.get('icad_url')}")
             continue
 
-    save_call_json(json_path, call_data)
+    save_call_json(logger, json_path, call_data)
 
     if system_config.get("icad_player", {}).get("enabled", 0) == 1:
         if m4a_exists and call_data.get('audio_url', None):
