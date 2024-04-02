@@ -271,8 +271,13 @@ class SCPStorage:
         """Ensure the remote directory structure exists."""
         parts = remote_directory.split("/")
         current_path = ""
+        index = 0
         for part in parts:
-            current_path = f'{current_path}/{part}'.replace("\\", "/")
+            if index > 0:
+                current_path = f'{current_path}/{part}'.replace("\\", "/")
+            else:
+                current_path = part.replace("\\", "/")
+            index += 1
             try:
                 sftp.stat(current_path)
             except FileNotFoundError:
