@@ -272,7 +272,7 @@ class SCPStorage:
         parts = remote_directory.split("/")
         current_path = ""
         index = 0
-        for part in parts:
+        for part in parts[1:]:
             if index > 0:
                 current_path = f'{current_path}/{part}'.replace("\\", "/")
             else:
