@@ -1,6 +1,5 @@
 import logging
 import os
-import subprocess
 from pathlib import Path
 from datetime import datetime
 import time
@@ -80,4 +79,3 @@ def clean_files(archive_path, archive_days):
                 module_logger.error(f"Failed to remove directory: {dir_path}, Error: {e}")
 
     module_logger.info(f"Cleaned {count} files.")
-

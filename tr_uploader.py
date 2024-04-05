@@ -139,10 +139,9 @@ def main():
                 "transcribe", {}).get("talkgroups", []):
                 logger.info(f"Not Sending to Transcribe API talkgroup not in allowed talkgroups.")
             else:
-                talkgroup_config = system_config.get("talkgroup_config", {}).get(str(talkgroup_decimal))
 
                 transcribe_json = upload_to_transcribe(system_config.get("transcribe", {}), wav_path, json_path,
-                                                       talkgroup_config)
+                                                       call_data, system_config.get("talkgroup_config", {}))
                 if transcribe_json:
                     call_data["transcript"] = transcribe_json
 
