@@ -1,7 +1,7 @@
 import requests
 import logging
 
-module_logger = logging.getLogger('icad_tr_uploader.icad_player_upload')
+module_logger = logging.getLogger('icad_tr_uploader.icad_player')
 
 
 def upload_to_icad_player(player_config, call_data):
