@@ -7,7 +7,7 @@ from lib.remote_storage_handler import get_archive_class
 module_logger = logging.getLogger('icad_tr_uploader.archive')
 
 
-def archive_files(archive_config, source_path, call_data, system_short_name):
+def archive_files(archive_config, source_path, wav_filename, call_data, system_short_name):
     wav_url_path = None
     m4a_url_path = None
     json_url_path = None
@@ -34,7 +34,6 @@ def archive_files(archive_config, source_path, call_data, system_short_name):
     # Create folder structure using current date
     folder_path = os.path.join(archive_config.get("archive_path"), generated_folder_path)
 
-    wav_filename = call_data.get("filename")
     m4a_filename = wav_filename.replace(".wav", ".m4a")
     json_filename = wav_filename.replace(".wav", ".json")
 

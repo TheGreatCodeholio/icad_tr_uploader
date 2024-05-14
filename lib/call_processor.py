@@ -103,7 +103,7 @@ def process_tr_call(global_config_data, wav_file_path, call_data, system_short_n
     if system_config.get("archive", {}).get("enabled", 0) == 1 and system_config.get("archive", {}).get("archive_days",
                                                                                                         0) >= 1:
         wav_url, m4a_url, json_url = archive_files(system_config.get("archive", {}),
-                                                   global_config_data.get("temp_file_path", "/dev/shm"), call_data,
+                                                   global_config_data.get("temp_file_path", "/dev/shm"), os.path.basename(wav_file_path), call_data,
                                                    system_short_name)
         if wav_url:
             call_data["audio_wav_url"] = wav_url
