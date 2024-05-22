@@ -1,6 +1,8 @@
-import datetime
+from datetime import datetime, timezone, timedelta
 import logging
+import mimetypes
 import os
+import shutil
 import time
 import traceback
 from stat import S_ISDIR
@@ -14,98 +16,55 @@ from botocore.exceptions import ClientError, NoCredentialsError, ParamValidation
 
 from paramiko import SSHClient, AutoAddPolicy, RSAKey, SSHException
 
-module_logger = logging.getLogger('icad_tr_uploader.remote_storage')
+module_logger = logging.getLogger('icad_tr_uploader.file_storage')
 
 
-def get_storage(remote_storage_config):
-    if remote_storage_config.get("storage_type") == 'scp':
-        return SCPStorage(remote_storage_config)
-    elif remote_storage_config.get("storage_type") == 'google_cloud':
-        return GoogleCloudStorage(remote_storage_config)
-    elif remote_storage_config.get("storage_type") == 'aws_s3':
-        return AWSS3Storage(remote_storage_config)
+def get_archive_class(archive_config):
+    if archive_config.get("archive_type") == 'scp':
+        return SCPStorage(archive_config.get('scp'))
+    elif archive_config.get("archive_type") == 'google_cloud':
+        return GoogleCloudStorage(archive_config.get('google_cloud'))
+    elif archive_config.get("archive_type") == 'aws_s3':
+        return AWSS3Storage(archive_config.get('aws_s3'))
+    elif archive_config.get("archive_type") == 'local':
+        return LocalStorage(archive_config.get('local'))
     else:
         module_logger.error('Invalid remote storage type.')
+        return None
 
 
 class GoogleCloudStorage:
-    """
-    A class to interact with Google Cloud Storage for uploading files.
 
-    Attributes:
-    -----------
-    remote_path : str
-        The remote path in the bucket where files will be stored.
-    storage_client : google.cloud.storage.client.Client
-        The Google Cloud Storage client.
-    bucket_name : str
-        The name of the bucket where files will be stored.
-    bucket : google.cloud.storage.bucket.Bucket
-        The Google Cloud Storage bucket object.
-
-    Methods:
-    --------
-    upload_file(file, make_public=True):
-        Uploads a file to Google Cloud Storage and optionally makes it public.
-    """
-
-    def __init__(self, config_data):
-        """
-        Initializes the GoogleCloudStorage object with configuration data.
-
-        Parameters:
-        -----------
-        config_data : dict
-            A dictionary containing the configuration for Google Cloud Storage.
-            Must include 'google_cloud' sub-dictionary with 'credentials_path',
-            'project_id', and 'bucket_name'. Also requires 'remote_path' for the
-            destination path in the bucket.
-        """
+    def __init__(self, storage_config):
         try:
-            google_cloud_config = config_data['google_cloud']
-            self.remote_path = config_data['remote_path']
-
             self.storage_client = storage.Client.from_service_account_json(
-                google_cloud_config['credentials_path'], project=google_cloud_config['project_id'])
-            self.bucket_name = google_cloud_config['bucket_name']
+                storage_config['credentials_file'], project=storage_config['project_id'])
+            self.bucket_name = storage_config['bucket_name']
             self.bucket = self.storage_client.get_bucket(self.bucket_name)
         except KeyError as e:
             module_logger.error(f"Google Cloud Missing required configuration data: {e}")
         except GoogleCloudError as e:
             module_logger.error(f"Google Cloud Storage error: {e}")
 
-    def upload_file(self, local_audio_path, make_public=True):
-        """
-        Uploads a file to Google Cloud Storage into a date-based directory structure and optionally makes it public.
-
-        Parameters:
-        -----------
-        local_audio_path : str
-            The local file path of the audio file to upload.
-        make_public : bool, optional
-            If True, makes the uploaded file publicly accessible (default is True).
-
-        Returns:
-        --------
-        str or None
-            The public URL of the uploaded file if make_public is True, otherwise None.
-            Returns None if the upload fails.
-        """
+    def upload_file(self, source_file_path, destination_file_path, destination_generated_path, max_attempts=3):
         try:
-            current_date = datetime.datetime.utcnow().strftime('%Y/%m/%d')
-            remote_directory = f"{self.remote_path.lstrip('/')}/{current_date}"
-            remote_path = f"{remote_directory}/{os.path.basename(local_audio_path)}"  # Updated remote path with date
+            if not os.path.exists(source_file_path) or not os.path.isfile(source_file_path):
+                logging.error(f'Source file {source_file_path} does not exist or is not a file.')
+                return False
+
+            mime_type, _ = mimetypes.guess_type(source_file_path)
+            if mime_type is None:
+                mime_type = 'application/octet-stream'
 
             if self.bucket:
-                blob = self.bucket.blob(remote_path)
+                blob = self.bucket.blob(destination_file_path)
 
-                with open(local_audio_path, 'rb') as af:
-                    blob.upload_from_file(af, content_type='audio/aac')  # Use af directly instead of af.read()
+                with open(source_file_path, 'rb') as file:
+                    blob.upload_from_file(file, content_type=mime_type)
 
-                if make_public:
-                    blob.make_public()
+                blob.make_public()
 
-                return blob.public_url if make_public else None
+                return blob.public_url
             else:
                 module_logger.warning("Google Storage Bucket is not available.")
                 return None
@@ -113,163 +72,125 @@ class GoogleCloudStorage:
             module_logger.error(f"Failed to upload file to Google Cloud Storage: {e}")
             return None
 
-    def clean_remote_files(self, archive_days):
-        """
-        Deletes files from Google Cloud Storage that are older than a specified number of days.
-        Identifies empty directories for potential cleanup.
-
-        Parameters:
-        -----------
-        archive_days : int
-            The number of days after which files should be deleted.
-        """
+    def clean_files(self, archive_path, archive_days):
+        delete_count = 0
         try:
-            blobs = self.bucket.list_blobs()
-            now = datetime.datetime.utcnow()
-            for blob in blobs:
-                if (now - blob.time_created).days > archive_days:
-                    print(f"Deleting: {blob.name}")
-                    blob.delete()
+            now = datetime.now(timezone.utc)
 
-            # Google Cloud Storage does not support empty directories in the same way
-            # traditional file systems do, since it is object-based.
-            # Thus, "cleaning" directories would typically involve removing 'directory' objects
-            # or objects with paths that no longer contain files. This can be complex and
-            # often unnecessary unless you have specific organizational needs for it.
+            blobs = self.bucket.list_blobs(prefix=archive_path)
+
+            for blob in blobs:
+                age_days = (now - blob.time_created).total_seconds() / 86400  # Convert seconds to days
+                if age_days > archive_days:
+                    blob.delete()
+                    delete_count += 1
+
+            module_logger.info(f"Deleted {delete_count} files from bucket {self.bucket}/{archive_path}")
+            return delete_count
 
         except GoogleCloudError as e:
             module_logger.error(f"Failed to clean Google Cloud Storage: {e}")
+            return None
 
 
 class AWSS3Storage:
-    """
-    A class to interact with Amazon S3 for uploading files.
 
-    Attributes:
-    -----------
-    s3 : boto3.resource
-        The Boto3 S3 resource.
-    bucket_name : str
-        The name of the S3 bucket where files will be stored.
-    bucket : boto3.resource.Bucket
-        The S3 Bucket object.
-    remote_path : str
-        The remote path in the bucket where files will be stored.
-
-    Methods:
-    --------
-    upload_file(local_audio_path, make_public=True):
-        Uploads a file to Amazon S3 and optionally makes it public.
-    """
-
-    def __init__(self, config_data):
-        """
-        Initializes the AWSS3Storage object with configuration data.
-
-        Parameters:
-        -----------
-        config_data : dict
-            A dictionary containing the configuration for Amazon S3. Must include
-            'aws_s3' sub-dictionary with 'access_key_id', 'secret_access_key', and
-            'bucket_name'. Also requires 'remote_path' for the destination path in the bucket.
-        """
+    def __init__(self, storage_config):
         try:
-            aws_s3_config = config_data['aws_s3']
+
+            if not storage_config.get("access_key_id", "") or not storage_config.get("secret_access_key",
+                                                                                     "") or not storage_config.get(
+                'bucket_name', ""):
+                module_logger.error(f"AWS S3 Missing required configuration data.")
+                return
 
             self.s3 = boto3.resource(
                 's3',
-                aws_access_key_id=aws_s3_config['access_key_id'],
-                aws_secret_access_key=aws_s3_config['secret_access_key']
+                aws_access_key_id=storage_config.get("access_key_id", ""),
+                aws_secret_access_key=storage_config.get("secret_access_key", "")
             )
-            self.bucket_name = aws_s3_config['bucket_name']
+            self.bucket_name = storage_config.get('bucket_name', "")
             self.bucket = self.s3.Bucket(self.bucket_name)
-            self.remote_path = config_data['remote_path']
+
         except KeyError as e:
             module_logger.error(f"AWS S3 Missing required configuration data: {e}")
         except NoCredentialsError as e:
             module_logger.error(f"Credentials not available for AWS S3: {e}")
 
-    def upload_file(self, local_audio_path, make_public=True):
-        """
-        Uploads a file to Amazon S3 into a date-based directory structure and optionally makes it public.
+    def upload_file(self, source_file_path, destination_file_path, destination_generated_path, max_attempts=3):\
 
-        Parameters:
-        -----------
-        local_audio_path : str
-            The local file path of the audio file to upload.
-        make_public : bool, optional
-            If True, makes the uploaded file publicly accessible (default is True).
-
-        Returns:
-        --------
-        str or None
-            The public URL of the uploaded file if make_public is True, otherwise None.
-            Returns None if the upload fails.
-        """
-        current_date = datetime.datetime.utcnow().strftime('%Y/%m/%d')
-        remote_directory = f"{self.remote_path.lstrip('/')}/{current_date}"
-        remote_path = f"{remote_directory}/{os.path.basename(local_audio_path)}"  # Include the date in the remote path
+        if not os.path.exists(source_file_path) or not os.path.isfile(source_file_path):
+            logging.error(f'Source file {source_file_path} does not exist or is not a file.')
+            return None
 
         try:
-            with open(local_audio_path, 'rb') as file:
-                self.bucket.put_object(Key=remote_path, Body=file)  # Use the updated remote path
+            with open(source_file_path, 'rb') as file:
+                self.bucket.put_object(Key=destination_file_path, Body=file)
 
-            if make_public:
-                self.s3.ObjectAcl(self.bucket_name, remote_path).put(ACL='public-read')
+            self.s3.ObjectAcl(self.bucket_name, destination_file_path).put(ACL='public-read')
 
-            return f"https://{self.bucket_name}.s3.amazonaws.com/{remote_path}" if make_public else None
+            # Encode the basename of the local_audio_path to ensure it's URL-safe
+            encoded_file_name = quote(os.path.basename(destination_file_path))
+
+            # First, join the base URL with the current_date
+            url_with_date = urljoin(f'https://{self.bucket_name}.s3.amazonaws.com/',
+                                    os.path.dirname(destination_file_path) + '/')
+
+            # Then, join the result with the encoded file name
+            return urljoin(url_with_date, encoded_file_name)
+
         except FileNotFoundError:
-            module_logger.error(f"Local file {local_audio_path} not found.")
+            module_logger.error(f"Local file {source_file_path} not found.")
             return None
         except (ClientError, ParamValidationError) as e:
             module_logger.error(f"Error uploading file to AWS S3: {e}")
             return None
 
-    def clean_remote_files(self, archive_days):
-        """
-        Deletes files from an S3 bucket that are older than a specified number of days.
+    def clean_files(self, archive_path, archive_days):
 
-        Parameters:
-        -----------
-        archive_days : int
-            The number of days after which files should be deleted.
-        """
-        s3_client = boto3.client('s3')
+        s3_client = self.s3.meta.client
         bucket_name = self.bucket_name  # Your S3 bucket name
 
-        try:
-            # List all objects within the bucket
-            paginator = s3_client.get_paginator('list_objects_v2')
-            page_iterator = paginator.paginate(Bucket=bucket_name)
+        delete_count = 0
 
+        try:
+            # List all objects within the bucket under the specific prefix
+            paginator = s3_client.get_paginator('list_objects_v2')
+            page_iterator = paginator.paginate(Bucket=bucket_name, Prefix=archive_path)
+
+            current_time = datetime.now(timezone.utc)
             for page in page_iterator:
                 if "Contents" in page:
                     for obj in page['Contents']:
                         last_modified = obj['LastModified']
-                        if last_modified < datetime.datetime.utcnow().replace(tzinfo=None) - datetime.timedelta(
-                                days=archive_days):
+                        if current_time - last_modified > timedelta(days=archive_days):
                             s3_client.delete_object(Bucket=bucket_name, Key=obj['Key'])
+                            delete_count += 1
 
-            # Additional logic for removing empty 'directories' could be implemented here
-            # Note: S3 does not actually have directories, but you can check for and delete empty prefixes
+            module_logger.info(f"Deleted {delete_count} files from bucket {bucket_name}/{archive_path}")
+
+            return delete_count
+
         except ClientError as e:
             module_logger.error(f"Error cleaning S3 files: {e}")
+            return None
+        except Exception as e:
+            module_logger.error(f"Unexpected Error Cleaning S3 Files: {e}")
+            return None
 
 
 class SCPStorage:
-    def __init__(self, config_data):
-        scp_config = config_data['scp']
-        self.host = scp_config['host']
-        self.port = scp_config['port']
-        self.username = scp_config['user']
-        self.password = scp_config['password']
-        self.private_key_path = scp_config['private_key_path']
-        self.base_url = scp_config['base_url']
-        self.remote_path = config_data['remote_path']
+    def __init__(self, storage_config):
+        self.host = storage_config.get("host")
+        self.port = storage_config.get("port", 22)
+        self.username = storage_config.get("user", "")
+        self.password = storage_config.get("password", "")
+        self.private_key_path = storage_config.get('private_key_path', "")
+        self.base_url = storage_config.get('base_url', "")
 
-    def ensure_remote_directory_exists(self, sftp, remote_directory):
+    def ensure_destination_directory_exists(self, sftp, destination_directory):
         """Ensure the remote directory structure exists."""
-        parts = remote_directory.split("/")
+        parts = destination_directory.split("/")
         current_path = ""
 
         for part in parts[1:]:
@@ -280,35 +201,34 @@ class SCPStorage:
                 sftp.stat(current_path)
             except FileNotFoundError:
                 sftp.mkdir(current_path)
+                module_logger.debug(f"Created SCP destination path {current_path}")
             except Exception as e:
                 traceback.print_exc()
                 module_logger.error(f"SCP Unhandled Exception: {e}")
 
-    def upload_file(self, local_audio_path, max_attempts=3):
-        """Uploads a file to the SCP storage with a date-based directory structure."""
-        if not os.path.exists(local_audio_path):
-            module_logger.error(f'Local file {local_audio_path} does not exist.')
-            raise FileNotFoundError(f'Local file {local_audio_path} does not exist.')
+    def upload_file(self, source_file_path, destination_file_path, destination_generated_path, max_attempts=3):
+        """Uploads a file to the SCP storage."""
 
-        current_date = datetime.datetime.utcnow().strftime('%Y/%m/%d')
-        remote_directory = f"{self.remote_path}/{current_date}".replace("\\", "/")
+        if not os.path.exists(source_file_path) or not os.path.isfile(source_file_path):
+            module_logger.error(f'Source file {source_file_path} does not exist or is not a file.')
+            return False
 
         for attempt in range(1, max_attempts + 1):
             try:
                 with self._create_sftp_session() as (ssh_client, sftp):
-                    self.ensure_remote_directory_exists(sftp, remote_directory)
-                    full_remote_path = f"{remote_directory}/{os.path.basename(local_audio_path)}"
+                    self.ensure_destination_directory_exists(sftp, os.path.dirname(destination_file_path))
 
-                    sftp.put(local_audio_path, full_remote_path)
+                    sftp.put(source_file_path, destination_file_path)
 
                     # Encode the basename of the local_audio_path to ensure it's URL-safe
-                    encoded_file_name = quote(os.path.basename(local_audio_path))
+                    encoded_file_name = quote(os.path.basename(destination_file_path))
 
                     # First, join the base URL with the current_date
-                    url_with_date = urljoin(self.base_url + '/', current_date + '/')
+                    url_with_date = urljoin(self.base_url + '/', destination_generated_path + '/')
 
                     # Then, join the result with the encoded file name
                     return urljoin(url_with_date, encoded_file_name)
+
             except Exception as error:  # Preferably catch more specific exceptions
                 traceback.print_exc()
                 module_logger.warning(f'Attempt {attempt} failed: {error}')
@@ -318,7 +238,7 @@ class SCPStorage:
         module_logger.error(f'All {max_attempts} attempts failed.')
         return False
 
-    def clean_remote_files(self, archive_days):
+    def clean_files(self, archive_path, archive_days):
         """Removes files older than a specified number of days within the remote archive path."""
 
         def clean_directory(sftp, path, archive_seconds):
@@ -337,12 +257,12 @@ class SCPStorage:
                     if time.time() - entry.st_mtime >= archive_seconds:
                         sftp.remove(remote_path)
                         count += 1
-                        module_logger.debug(f"Successfully cleaned remote file: {remote_path}")
+                        module_logger.debug(f"Successfully cleaned remote folder: {remote_path}")
 
         try:
             with self._create_sftp_session() as (ssh_client, sftp):
                 count = 0
-                clean_directory(sftp, self.remote_path, archive_days * 24 * 3600)
+                clean_directory(sftp, archive_path, archive_days * 24 * 3600)
                 module_logger.info(f"Cleaned {count} files remotely.")
         except Exception as e:
             module_logger.error(f"Error during remote cleanup: {e}")
@@ -363,20 +283,30 @@ class SCPStorage:
 
         try:
 
-            # Use the private key for authentication if specified
-            if self.private_key_path:  # Assuming self.private_key_path might be None or empty if not used
-                private_key = RSAKey.from_private_key_file(self.private_key_path)
-                ssh_connect_kwargs = {"pkey": private_key}
-            else:
-                ssh_connect_kwargs = {}
+            ssh_connect_kwargs = {
+                "username": self.username,
+                "port": self.port,
+                "look_for_keys": False,
+                "allow_agent": False
+            }
 
-            # Add password to the connection arguments if it is not blank
-            if self.password:  # Assuming self.password is defined and might be empty if not used
+            # Use the private key for authentication if specified
+            if self.private_key_path and os.path.exists(self.private_key_path):
+                try:
+                    private_key = RSAKey.from_private_key_file(self.private_key_path)
+                    ssh_connect_kwargs["pkey"] = private_key
+                except SSHException as e:
+                    module_logger.error(f"Failed to load private key: {e}")
+                    if self.password:
+                        ssh_connect_kwargs["password"] = self.password
+
+            elif self.password:
                 ssh_connect_kwargs["password"] = self.password
+            else:
+                raise ValueError("No valid authentication method provided.")
 
             # Connect using either private key, password, or both
-            ssh_client.connect(self.host, port=self.port, username=self.username,
-                               look_for_keys=False, allow_agent=False, **ssh_connect_kwargs)
+            ssh_client.connect(self.host, **ssh_connect_kwargs)
 
             sftp = ssh_client.open_sftp()
             yield ssh_client, sftp
@@ -387,3 +317,56 @@ class SCPStorage:
             if sftp:
                 sftp.close()
             ssh_client.close()
+
+
+class LocalStorage:
+    def __init__(self, storage_config):
+        self.base_url = storage_config.get("base_url", "")
+
+    def ensure_destination_directory_exists(self, destination_directory):
+        """Ensure the local directory structure exists."""
+        if not os.path.exists(destination_directory):
+            os.makedirs(destination_directory)
+
+    def upload_file(self, source_file_path, destination_file_path, destination_generated_path, max_attempts=None):
+        """Copies a file to the local storage with a date-based directory structure."""
+        if not os.path.exists(source_file_path) or not os.path.isfile(source_file_path):
+            logging.error(f'Source file {source_file_path} does not exist or is not a file.')
+            return False
+
+        try:
+            self.ensure_destination_directory_exists(os.path.dirname(destination_file_path))
+
+            shutil.copy(source_file_path, destination_file_path)
+
+            # Encode the basename of the local_audio_path to ensure it's URL-safe
+            encoded_file_name = quote(os.path.basename(destination_file_path))
+
+            # First, join the base URL with the current_date
+            url_with_date = urljoin(self.base_url + '/', destination_generated_path + '/')
+
+            # Then, join the result with the encoded file name
+            return urljoin(url_with_date, encoded_file_name)
+
+        except Exception as error:  # Preferably catch more specific exceptions
+            logging.warning(f'Local Archive Failed: {error}')
+            return False
+
+    def clean_files(self, archive_path, archive_days):
+        """Removes files older than a specified number of days within the local archive path."""
+        archive_seconds = archive_days * 24 * 3600
+        current_time = time.time()
+
+        for root, dirs, files in os.walk(archive_path, topdown=False):
+            for name in files:
+                file_path = os.path.join(root, name)
+                if current_time - os.path.getmtime(file_path) >= archive_seconds:
+                    os.remove(file_path)
+                    logging.debug(f"Successfully cleaned local file: {file_path}")
+
+            for name in dirs:
+                dir_path = os.path.join(root, name)
+                try:
+                    os.rmdir(dir_path)  # Try to remove the directory if it's empty
+                except OSError:
+                    pass  # Directory not empty or other error

@@ -1,4 +1,5 @@
 import base64
+import json
 import logging
 import os
 import time
@@ -29,16 +30,19 @@ def upload_to_broadcastify_calls(broadcastify_config, m4a_file_path, call_data):
     module_logger.info("Uploading to Broadcastify Calls")
 
     broadcastify_url = "https://api.broadcastify.com/call-upload"
-    metadata_path = m4a_file_path.replace(".m4a", ".json")
 
     headers = {
         "User-Agent": "TrunkRecorder1.0"
     }
 
     try:
-        with open(metadata_path, 'rb') as metadata_file, open(m4a_file_path, 'rb') as audio_file:
+
+        json_string = json.dumps(call_data)
+        json_bytes = json_string.encode('utf-8')
+
+        with open(m4a_file_path, 'rb') as audio_file:
             files = {
-                'metadata': (os.path.basename(metadata_path), metadata_file, 'application/json'),
+                'metadata': (os.path.basename(m4a_file_path.replace("m4a", ".json")), json_bytes, 'application/json'),
                 'audio': (os.path.basename(m4a_file_path), audio_file, 'audio/aac'),
                 'callDuration': (None, str(call_data["call_length"])),
                 'systemId': (None, str(broadcastify_config["system_id"])),
@@ -47,15 +51,12 @@ def upload_to_broadcastify_calls(broadcastify_config, m4a_file_path, call_data):
                 'tg': (None, str(call_data["talkgroup"]))
             }
 
-            module_logger.debug(files)
-
-            response = requests.post(broadcastify_url, files=files)
+            response = requests.post(broadcastify_url, headers=headers, files=files)
             if response.status_code != 200:
                 module_logger.error(
                     f"Failed to upload to Broadcastify Calls: Status {response.status_code}, Response: {response.text}")
                 return False
 
-            # Assuming the response contains JSON with a direct URL for uploading
             try:
                 upload_url = response.text.split(" ")[1]
                 if not upload_url:

@@ -1,0 +1,30 @@
+FROM robotastic/trunk-recorder:RC5.0
+
+# Install additional dependencies
+RUN apt update  && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    python3.11 \
+    python3.11-distutils \
+    python3.11-venv \
+    python3-pip \
+    python3-setuptools \
+    python3-dev \
+    && \
+    apt clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Set the working directory in the container
+WORKDIR /app
+
+ADD lib /app/icad_tr_uploader/lib
+
+# Copy the Uploader Script to icad_tr_uploader
+COPY tr_uploader.py /app/icad_tr_uploader
+COPY lib /app/icad_tr_uploader/lib
+COPY requirements.txt /app/icad_tr_uploader
+
+# Upgrade pip
+RUN pip3 install --upgrade pip
+
+# Install any needed packages specified in requirements.txt
+RUN cd icad_tr_uploader && pip3 install -r requirements.txt

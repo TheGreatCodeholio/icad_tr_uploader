@@ -1,24 +1,22 @@
 {
   "log_level": 1,
+  "temp_file_path": "/dev/shm",
   "systems": {
     "example-system": {
-      "archive_days": 0,
-      "archive_path": "/home/example/tr_archive",
-      "archive_extensions": [
-        ".m4a",
-        ".json",
-        ".wav",
-        ".log"
-      ],
-      "remote_storage": {
+      "archive": {
         "enabled": 0,
-        "storage_type": "scp",
+        "archive_type": "scp",
+        "archive_path": "",
         "archive_days": 0,
-        "remote_path": "/var/www/example.com/audio",
+        "archive_extensions": [
+          ".wav",
+          ".m4a",
+          ".json"
+        ],
         "google_cloud": {
           "project_id": "",
           "bucket_name": "",
-          "credentials_path": ""
+          "credentials_file": ""
         },
         "aws_s3": {
           "access_key_id": "",
@@ -31,39 +29,49 @@
           "port": 22,
           "user": "",
           "password": "",
-          "private_key_path": "/home/user/.ssh/id_rsa",
+          "private_key_path": "",
+          "base_url": "https://example.com/audio"
+        },
+        "local": {
           "base_url": "https://example.com/audio"
         }
       },
-      "transcribe": {
+      "audio_compression": {
         "enabled": 0,
-        "talkgroups": [
-          1,
-          2,
-          4
-        ],
-        "api_url": "",
-        "api_key": ""
+        "sample_rate": 16000,
+        "bitrate": 96
       },
-      "icad_player": {
-        "enabled": 0,
-        "audio_base_url": "",
-        "talkgroups": [
-          1,
-          2,
-          8
-        ],
-        "api_url": "",
-        "api_key": ""
-      },
-      "rdio_systems": [
+      "icad_tone_detect_legacy": [
         {
           "enabled": 0,
-          "system_id": 1111,
-          "rdio_url": "http://example.com:3000/api/trunk-recorder-call-upload",
-          "rdio_api_key": "example-api-key"
+          "talkgroups": [
+            100
+          ],
+          "icad_url": "https://detect.example.com/tone_detect",
+          "icad_api_key": ""
         }
       ],
+      "tone_detection": {
+        "enabled": 1,
+        "allowed_talkgroups": [
+          "*"
+        ],
+        "matching_threshold": 2,
+        "time_resolution": 100,
+        "tone_a_min_length": 0.8,
+        "tone_b_min_length": 2.8,
+        "long_tone_min_length": 2.0,
+        "hi_low_interval": 0.2,
+        "hi_low_min_alternations": 3
+      },
+      "transcribe": {
+        "enabled": 0,
+        "allowed_talkgroups": [
+          "*"
+        ],
+        "api_url": "",
+        "api_key": ""
+      },
       "openmhz": {
         "enabled": 0,
         "short_name": "example",
@@ -75,35 +83,44 @@
         "system_id": 0,
         "api_key": ""
       },
-      "icad_tone_detect": [
+      "icad_player": {
+        "enabled": 0,
+        "allowed_talkgroups": [
+          "*"
+        ],
+        "api_url": "https://player.example.com/upload-audio",
+        "api_key": ""
+      },
+      "rdio_systems": [
         {
           "enabled": 0,
-          "legacy": 0,
-          "talkgroups": [
-            1,
-            2,
-            4
-          ],
-          "icad_url": "https://detect.example.com/tone_detect",
-          "icad_api_key": ""
+          "system_id": 1111,
+          "rdio_url": "http://example.com:3000/api/trunk-recorder-call-upload",
+          "rdio_api_key": "example-api-key"
         }
       ],
       "talkgroup_config": {
-        "1": {
-          "language": "en",
-          "beam_size": 5,
-          "best_of": 5,
-          "initial_prompt": null,
-          "use_last_as_initial_prompt": false,
-          "word_timestamps": false,
-          "vad_filter": true,
-          "vad_parameters": {
-            "threshold": 0.5,
-            "min_speech_duration_ms": 250,
-            "max_speech_duration_s": 3600,
-            "min_silence_duration_ms": 2000,
-            "window_size_samples": 1024,
-            "speech_pad_ms": 400
+        "*": {
+          "whisper": {
+            "language": "en",
+            "beam_size": 5,
+            "best_of": 5,
+            "initial_prompt": null,
+            "use_last_as_initial_prompt": false,
+            "word_timestamps": true,
+            "cut_tones": false,
+            "cut_pre_tone": 0.5,
+            "cut_post_tone": 0.5,
+            "amplify_audio": false,
+            "vad_filter": true,
+            "vad_parameters": {
+              "threshold": 0.3,
+              "min_speech_duration_ms": 250,
+              "max_speech_duration_s": 3600,
+              "min_silence_duration_ms": 400,
+              "window_size_samples": 1024,
+              "speech_pad_ms": 400
+            }
           }
         }
       }
